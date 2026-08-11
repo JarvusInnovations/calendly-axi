@@ -1,0 +1,56 @@
+{
+  "name": "calendly-axi",
+  "version": "0.1.0",
+  "description": "Agent-ergonomic CLI for the Calendly API — the booking loop from the terminal, following AXI standards.",
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "build": "tsc && chmod +x dist/bin/calendly-axi.js",
+    "check": "tsc --noEmit",
+    "dev": "bun bin/calendly-axi.ts",
+    "prepublishOnly": "npm run build",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "calendly",
+    "scheduling",
+    "cli",
+    "agent",
+    "axi",
+    "toon"
+  ],
+  "author": "Jarvus Innovations <hello@jarv.us>",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "calendly-axi": "dist/bin/calendly-axi.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JarvusInnovations/calendly-axi.git"
+  },
+  "homepage": "https://github.com/JarvusInnovations/calendly-axi#readme",
+  "bugs": {
+    "url": "https://github.com/JarvusInnovations/calendly-axi/issues"
+  },
+  "files": [
+    "dist",
+    "skills/calendly-axi",
+    "LICENSE",
+    "README.md"
+  ],
+  "dependencies": {
+    "@toon-format/toon": "^4.1.1",
+    "axi-sdk-js": "^0.1.10"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
