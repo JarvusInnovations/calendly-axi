@@ -184,7 +184,7 @@ export const HOME_FLAGS: FlagSpec = {};
 
 export const TYPES_FLAGS: Record<string, FlagSpec> = {
   list: { boolean: ["--org", "--all", "--inactive"] },
-  view: {},
+  view: { boolean: ["--full"] },
   slots: { value: ["--from", "--to", "--until"] },
   create: {
     value: [
