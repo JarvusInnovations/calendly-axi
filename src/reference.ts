@@ -104,11 +104,12 @@ export const COMMAND_GROUPS: CommandGroup[] = [
         usage: "webhooks [list|view|create|delete|sample] [<args>] [flags]",
         summary: "Manage webhook subscriptions (reads work on Free; creation needs a paid plan)",
         flags: [
-          "--scope organization|user|group   default: organization",
-          "--user <who> / --group <id>       scope target",
-          "--url <https-url> --events <e,e>  required for create",
+          "--scope organization|user|group   default: organization; user defaults --user to self",
+          "--user <who> / --group <id>       scope target (user/group scope only)",
+          "--url <https-url> --events <e,e>  required for create; --url must be https",
           "--signing-key <key>               passed through, never stored (create)",
-          "--event <event>                   which sample payload to fetch (sample)",
+          "--event <event>                   which sample payload to fetch (sample; no --group)",
+          "no update endpoint — delete + create to change a subscription's url/events",
         ],
         examples: [
           "calendly-axi webhooks",
