@@ -54,33 +54,8 @@ describe("command stubs: unknown flag rejection, no API call", () => {
   });
 });
 
-describe("command stubs: NOT_IMPLEMENTED naming the owning plan", () => {
-  // `types` (list/view/slots/availability reads and create/update/availability
-  // --rules writes) is fully implemented as of `types-write` — see
-  // test/commands/types.test.ts. No stub coverage remains for it here.
-
-  it("events cancel/no-show name events-write (list/view/invitees are implemented — see events.test.ts)", async () => {
-    for (const sub of ["cancel", "no-show"]) {
-      // eventsCommand is async (real reads land before these stubs in the
-      // switch), so the NOT_IMPLEMENTED rejection surfaces as a rejected
-      // promise rather than a synchronous throw.
-      const err = await eventsCommand([sub, "x"]).catch((e) => e as { suggestions: string[] });
-      expect(err.suggestions.join(" ")).toContain("events-write");
-    }
-  });
-
-  it("link names events-write", () => {
-    expect(catchErr(() => linkCommand(["x"])).suggestions.join(" ")).toContain("events-write");
-  });
-
-  // `book` is implemented as of the `book` plan — see test/commands/book.test.ts.
-});
-
-function catchErr(fn: () => unknown): { code: string; message: string; suggestions: string[] } {
-  try {
-    fn();
-    throw new Error("should have thrown");
-  } catch (err) {
-    return err as { code: string; message: string; suggestions: string[] };
-  }
-}
+// Every command that once stubbed a NOT_IMPLEMENTED path is now fully built:
+// `types` (list/view/slots/availability reads and create/update/availability
+// --rules writes) as of `types-write`, `events cancel/no-show` and `link` as
+// of `events-write`, and `book` as of the `book` plan — see each plan's
+// namesake test file. No NOT_IMPLEMENTED stub coverage remains here.

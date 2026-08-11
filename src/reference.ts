@@ -35,7 +35,10 @@ export const COMMAND_GROUPS: CommandGroup[] = [
           "--user <who>                 scope to another user",
           "--limit <n>                  cap the result count (list; default 100)",
           "--reason <text>               cancellation reason (cancel)",
+          "no reschedule endpoint — cancel and rebook with `book` or `link`; invitees hold their own reschedule_url (cancel)",
           "--undo                        clear a no-show mark (no-show)",
+          "--event <event>               event context for a bare invitee uuid (no-show)",
+          "no-show's <invitee> is the full invitee URI, or a bare invitee uuid plus --event <event>",
         ],
         examples: [
           "calendly-axi events",
@@ -43,12 +46,14 @@ export const COMMAND_GROUPS: CommandGroup[] = [
           "calendly-axi events invitees <uuid>",
           'calendly-axi events invitees <uuid> --email "ada@example.com"',
           'calendly-axi events cancel <uuid> --reason "scheduling conflict"',
-          "calendly-axi events no-show <invitee-uuid>",
+          "calendly-axi events no-show <invitee-uuid> --event <event-uuid>",
+          "calendly-axi events no-show <invitee-uuid> --event <event-uuid> --undo",
         ],
       },
       {
         usage: "link <event-type>",
-        summary: "Mint a single-use scheduling link for an event type",
+        summary: "Mint a single-use scheduling link for an event type — booking_url + resolved type, one booking then it dies",
+        flags: ["<event-type>   UUID, URI, or name — resolved against self scope"],
         examples: ['calendly-axi link "30 Minute Meeting"', "calendly-axi link <event-type-uuid>"],
       },
       {

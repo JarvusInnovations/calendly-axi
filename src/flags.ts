@@ -247,7 +247,7 @@ export const EVENTS_FLAGS: Record<string, FlagSpec> = {
   view: {},
   invitees: { value: ["--status", "--email"] },
   cancel: { value: ["--reason"] },
-  "no-show": { boolean: ["--undo"] },
+  "no-show": { value: ["--event"], boolean: ["--undo"] },
 };
 
 export const BUSY_FLAGS: FlagSpec = {

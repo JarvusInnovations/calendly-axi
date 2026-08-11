@@ -317,7 +317,7 @@ describe("events invitees", () => {
     expect(out).toContain("Ada Lovelace");
     expect(out).toContain("no");
     expect(out).toContain("yes");
-    expect(out).toContain("events no-show <invitee-uuid>");
+    expect(out).toContain("events invitees EVT1 --email <invitee-email>");
     expect(out).toContain("events cancel EVT1");
   });
 
@@ -342,7 +342,9 @@ describe("events invitees", () => {
     expect(out).toContain("Company?");
     expect(out).toContain("cancel_url:");
     expect(out).toContain("reschedule_url:");
-    expect(out).toContain("events no-show INV1");
+    expect(out).toContain(
+      "events no-show https://api.calendly.com/scheduled_events/EVT1/invitees/INV1",
+    );
     expect(out).toContain("events cancel EVT1");
   });
 
@@ -353,5 +355,186 @@ describe("events invitees", () => {
     );
     const out = await eventsCommand(["invitees", "EVT1", "--email", "shared@example.com"]);
     expect(out).toContain("invitees[2]{uuid,name,email,status,no_show}:");
+  });
+
+});
+
+describe("events cancel", () => {
+  function scheduledEvent(overrides: Record<string, unknown> = {}) {
+    return {
+      uri: "https://api.calendly.com/scheduled_events/EVT1",
+      name: "Intro Call",
+      status: "active",
+      start_time: "2026-08-18T19:00:00Z",
+      end_time: "2026-08-18T19:30:00Z",
+      ...overrides,
+    };
+  }
+
+  it("cancels an active event and reports invitees notified", async () => {
+    seedCache();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ resource: scheduledEvent() }))
+      .mockResolvedValueOnce(jsonResponse({}));
+
+    const out = await eventsCommand(["cancel", "EVT1", "--reason", "scheduling conflict"]);
+
+    expect(spy).toHaveBeenCalledTimes(2);
+    const [cancelUrl, cancelInit] = spy.mock.calls[1]!;
+    expect(String(cancelUrl)).toContain("/scheduled_events/EVT1/cancellation");
+    expect(JSON.parse(String((cancelInit as RequestInit).body))).toEqual({ reason: "scheduling conflict" });
+
+    expect(out).toContain("canceled:");
+    expect(out).toContain("Intro Call");
+    expect(out).toContain("invitees notified");
+  });
+
+  it("omits a body when --reason is not given", async () => {
+    seedCache();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ resource: scheduledEvent() }))
+      .mockResolvedValueOnce(jsonResponse({}));
+
+    await eventsCommand(["cancel", "EVT1"]);
+
+    const [, cancelInit] = spy.mock.calls[1]!;
+    expect((cancelInit as RequestInit).body).toBeUndefined();
+  });
+
+  it("already-canceled event is a no-op, exit 0, detected from the pre-fetch", async () => {
+    seedCache();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ resource: scheduledEvent({ status: "canceled" }) }));
+
+    const out = await eventsCommand(["cancel", "EVT1"]);
+
+    expect(spy).toHaveBeenCalledTimes(1); // no cancellation POST once already canceled
+    expect(out).toContain("event already canceled (no-op)");
+  });
+
+  it("a double-cancel race (API rejects post-fetch) is translated to the same no-op", async () => {
+    seedCache();
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ resource: scheduledEvent() }))
+      .mockResolvedValueOnce(
+        jsonResponse({ title: "InvalidCancellation", message: "This event is already canceled" }, 400),
+      );
+
+    const out = await eventsCommand(["cancel", "EVT1"]);
+    expect(out).toContain("event already canceled (no-op)");
+  });
+
+  it("requires the event argument", async () => {
+    seedCache();
+    const spy = vi.spyOn(globalThis, "fetch");
+    await expect(eventsCommand(["cancel"])).rejects.toMatchObject({ code: "USAGE" });
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe("events no-show", () => {
+  const inviteeUri = "https://api.calendly.com/scheduled_events/EVT1/invitees/INV1";
+
+  it("marks an invitee as a no-show", async () => {
+    seedCache();
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse({ resource: {} }));
+
+    const out = await eventsCommand(["no-show", inviteeUri]);
+
+    const [url, init] = spy.mock.calls[0]!;
+    expect(String(url)).toContain("/invitee_no_shows");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({ invitee: inviteeUri });
+    expect(out).toContain("no-show marked");
+    expect(out).toContain("INV1");
+  });
+
+  it("marking an already-marked invitee is a no-op, exit 0", async () => {
+    seedCache();
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      jsonResponse({ title: "InvalidInvitee", message: "This invitee is already marked as a no-show" }, 400),
+    );
+
+    const out = await eventsCommand(["no-show", inviteeUri]);
+    expect(out).toContain("already marked as no-show (no-op)");
+  });
+
+  it("rejects a bare invitee uuid without --event, naming the --event fix, zero API calls", async () => {
+    seedCache();
+    const spy = vi.spyOn(globalThis, "fetch");
+    const err = await eventsCommand(["no-show", "INV1"]).catch((e) => e as { code: string; suggestions: string[] });
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.suggestions.join(" ")).toContain("--event <event-uuid>");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("accepts a bare invitee uuid with --event, constructing the nested URI", async () => {
+    seedCache();
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse({ resource: {} }, 201));
+    const out = await eventsCommand(["no-show", "INV1", "--event", "EVT1"]);
+    const [, init] = spy.mock.calls[0]!;
+    expect(JSON.parse(String((init as RequestInit).body)).invitee).toBe(
+      "https://api.calendly.com/scheduled_events/EVT1/invitees/INV1",
+    );
+    expect(out).toContain("no-show marked");
+  });
+
+  it("accepts --event as a full event URI for a bare invitee uuid", async () => {
+    seedCache();
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse({ resource: {} }, 201));
+    await eventsCommand(["no-show", "INV1", "--event", "https://api.calendly.com/scheduled_events/EVT1"]);
+    const [, init] = spy.mock.calls[0]!;
+    expect(JSON.parse(String((init as RequestInit).body)).invitee).toBe(
+      "https://api.calendly.com/scheduled_events/EVT1/invitees/INV1",
+    );
+  });
+
+  it("--undo fetches the invitee via the URI's embedded event uuid and deletes via no_show.uri", async () => {
+    seedCache();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({
+          resource: { uri: inviteeUri, no_show: { uri: "https://api.calendly.com/invitee_no_shows/NS1" } },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const out = await eventsCommand(["no-show", inviteeUri, "--undo"]);
+
+    const [getUrl] = spy.mock.calls[0]!;
+    expect(String(getUrl)).toContain("/scheduled_events/EVT1/invitees/INV1");
+    const [delUrl, delInit] = spy.mock.calls[1]!;
+    expect(String(delUrl)).toContain("/invitee_no_shows/NS1");
+    expect((delInit as RequestInit).method).toBe("DELETE");
+    expect(out).toContain("no-show cleared");
+  });
+
+  it("--undo on an invitee with no no_show mark is a no-op, exit 0, without a DELETE call", async () => {
+    seedCache();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ resource: { uri: inviteeUri, no_show: null } }));
+
+    const out = await eventsCommand(["no-show", inviteeUri, "--undo"]);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(out).toContain("not marked as no-show (no-op)");
+  });
+
+  it("--undo also rejects a bare invitee uuid", async () => {
+    seedCache();
+    const spy = vi.spyOn(globalThis, "fetch");
+    await expect(eventsCommand(["no-show", "INV1", "--undo"])).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("requires the invitee argument", async () => {
+    seedCache();
+    const spy = vi.spyOn(globalThis, "fetch");
+    await expect(eventsCommand(["no-show"])).rejects.toMatchObject({ code: "USAGE" });
+    expect(spy).not.toHaveBeenCalled();
   });
 });

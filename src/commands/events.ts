@@ -3,18 +3,15 @@ import { calendlyRequest, requireCredentials, type QueryValue } from "../calendl
 import { resolveIdentifier, uuidFromUri } from "../calendly/ids.js";
 import { moreAvailableHint, paginate, paginationSummary } from "../calendly/paginate.js";
 import { resolveScope, resolveSelf } from "../calendly/scope.js";
-import type { ProfileCache } from "../config.js";
+import type { Credentials, ProfileCache } from "../config.js";
 import { EVENTS_FLAGS, bool, parseSubcommand, requirePositional, str, type Parsed } from "../flags.js";
 import { compact, joinBlocks, renderHelp, renderListResponse, renderObject } from "../output/index.js";
 import type { FieldDef } from "../output/schema.js";
 import { formatInZone } from "../time/format.js";
 import { resolveWindow } from "../time/windows.js";
-import { notImplemented } from "./not-implemented.js";
 
 /**
  * `events list|view|invitees|cancel|no-show` — see `specs/commands/events.md`.
- * Reads (list/view/invitees) land with `events-read`; cancel/no-show land
- * with `events-write`.
  */
 export async function eventsCommand(args: string[]) {
   const { sub, parsed } = parseSubcommand("events", args, EVENTS_FLAGS, "list");
@@ -26,8 +23,9 @@ export async function eventsCommand(args: string[]) {
     case "invitees":
       return eventsInvitees(parsed);
     case "cancel":
+      return eventsCancel(parsed);
     case "no-show":
-      return notImplemented(`events ${sub}`, "events-write");
+      return eventsNoShow(parsed);
     default:
       // Unreachable — parseSubcommand already validated `sub` against EVENTS_FLAGS.
       throw new AxiError(`unknown events subcommand "${sub}"`, "VALIDATION_ERROR", []);
@@ -239,7 +237,7 @@ async function eventsInvitees(parsed: Parsed) {
     });
     return joinBlocks(
       renderObject(detail),
-      renderHelp([`calendly-axi events no-show ${inviteeUuid}`, `calendly-axi events cancel ${eventUuid}`]),
+      renderHelp([`calendly-axi events no-show ${inv.uri}`, `calendly-axi events cancel ${eventUuid}`]),
     );
   }
 
@@ -260,7 +258,175 @@ async function eventsInvitees(parsed: Parsed) {
     name: "invitees",
     items: result.items,
     schema,
-    suggestions: ["calendly-axi events no-show <invitee-uuid>", `calendly-axi events cancel ${eventUuid}`],
+    suggestions: [
+      `calendly-axi events no-show <invitee-uuid> --event ${eventUuid}`,
+      `calendly-axi events invitees ${eventUuid} --email <invitee-email>`,
+      `calendly-axi events cancel ${eventUuid}`,
+    ],
     emptyMessage: `0 invitees found for event ${eventUuid}${filterNote ? ` (${filterNote})` : ""}`,
   });
+}
+
+// ── events cancel ────────────────────────────────────────────────────
+
+/**
+ * Detects the "already in the desired state" shape of a translated
+ * `AxiError` — Calendly's exact double-cancel / double-mark error body is
+ * undocumented (see `plans/events-write.md` Risks), so this is a heuristic:
+ * a 400/409 whose translated message mentions "already" plus one of the
+ * given keywords is treated as a no-op rather than a genuine failure. Live
+ * confirmation is a follow-up (see the plan's Notes at closeout).
+ */
+function looksLikeAlready(err: unknown, keywords: string[]): boolean {
+  if (!(err instanceof AxiError)) return false;
+  if (err.code !== "VALIDATION_ERROR" && err.code !== "CONFLICT") return false;
+  const haystack = err.message.toLowerCase();
+  if (!haystack.includes("already")) return false;
+  return keywords.some((k) => haystack.includes(k));
+}
+
+async function eventsCancel(parsed: Parsed): Promise<string> {
+  const creds = requireCredentials();
+  const self = await resolveSelf(creds);
+
+  const eventArg = requirePositional(parsed, 0, "event", 'calendly-axi events cancel <event> [--reason "..."]');
+  const { uuid } = resolveIdentifier("scheduled_events", eventArg);
+
+  // Fetched first for name/start (needed either way for the confirmation
+  // line) — the same fetch tells us if it's already canceled, which covers
+  // the common no-op case with zero risk of a malformed cancellation call.
+  const res = await calendlyRequest<{ resource: Record<string, unknown> }>(`scheduled_events/${uuid}`, {
+    credentials: creds,
+  });
+  const event = res.resource;
+  const name = String(event.name ?? "");
+  const start = formatInZone(String(event.start_time), self.timezone);
+
+  if (event.status === "canceled") {
+    return renderObject({ status: "event already canceled (no-op)", uuid, name, start });
+  }
+
+  const reason = str(parsed, "--reason");
+  try {
+    await calendlyRequest(`scheduled_events/${uuid}/cancellation`, {
+      method: "POST",
+      credentials: creds,
+      body: reason ? { reason } : undefined,
+    });
+  } catch (err) {
+    // Belt-and-suspenders for a race: the pre-fetch above already caught the
+    // common case, but two concurrent cancels can still both pass it.
+    if (looksLikeAlready(err, ["cancel"])) {
+      return renderObject({ status: "event already canceled (no-op)", uuid, name, start });
+    }
+    throw err;
+  }
+
+  return renderObject({ canceled: `${name} at ${start} — invitees notified`, uuid });
+}
+
+// ── events no-show ───────────────────────────────────────────────────
+
+const INVITEE_URI_RE =
+  /^https:\/\/api\.calendly\.com\/scheduled_events\/([^/]+)\/invitees\/([^/]+)\/?$/i;
+
+interface InviteeRef {
+  eventUuid: string;
+  inviteeUuid: string;
+  uri: string;
+}
+
+/**
+ * Calendly nests every invitee URI under its event (`.../scheduled_events/
+ * {event}/invitees/{invitee}`) and exposes no flat `GET /invitees/{uuid}`,
+ * so a bare invitee UUID alone has no event context to resolve against for
+ * either the mark or the `--undo` path. Per `principles.md` the agent must
+ * never be made to build a URI itself, so `events no-show` accepts either
+ * form the agent already holds after `events invitees <event>`: the full
+ * invitee URI, or a bare invitee UUID paired with `--event <event>` (the
+ * nested URI is constructed here) — see
+ * `specs/commands/events.md#events-no-show`.
+ */
+function resolveInviteeRef(value: string, eventFlag: string | undefined): InviteeRef {
+  const match = INVITEE_URI_RE.exec(value.trim());
+  if (match) {
+    const [, eventUuid, inviteeUuid] = match;
+    return { eventUuid: eventUuid!, inviteeUuid: inviteeUuid!, uri: value.trim() };
+  }
+  if (value.includes("/")) {
+    throw new AxiError(`"${value}" is not an invitee URI or UUID`, "VALIDATION_ERROR", [
+      "Pass the invitee's full URI, or its bare UUID plus --event <event>",
+      "Run `calendly-axi events invitees <event>` to list invitee UUIDs",
+    ]);
+  }
+  if (!eventFlag) {
+    throw new AxiError("a bare invitee UUID needs its event for context — pass --event <event>", "VALIDATION_ERROR", [
+      "Calendly nests invitees under their event, so the UUID alone can't be resolved",
+      `Run \`calendly-axi events no-show ${value} --event <event-uuid>\` (event uuid from \`calendly-axi events\`)`,
+    ]);
+  }
+  const eventUuid = resolveIdentifier("scheduled_events", eventFlag, "event").uuid;
+  return {
+    eventUuid,
+    inviteeUuid: value,
+    uri: `https://api.calendly.com/scheduled_events/${eventUuid}/invitees/${value}`,
+  };
+}
+
+async function noShowMark(ref: InviteeRef, creds: Credentials): Promise<string> {
+  try {
+    await calendlyRequest("invitee_no_shows", {
+      method: "POST",
+      credentials: creds,
+      body: { invitee: ref.uri },
+    });
+  } catch (err) {
+    if (looksLikeAlready(err, ["no_show", "no-show", "no show", "marked"])) {
+      return renderObject({ status: "invitee already marked as no-show (no-op)", invitee: ref.inviteeUuid });
+    }
+    throw err;
+  }
+  return renderObject({ status: "no-show marked", invitee: ref.inviteeUuid });
+}
+
+/**
+ * `--undo`: there is no way to look up a no-show record from an invitee URI
+ * alone, so this fetches the invitee record (which the URI's embedded event
+ * uuid makes possible) and follows its `no_show.uri` to the record to
+ * delete — the path `plans/events-write.md` settled on after ruling out
+ * every alternative that doesn't need the event uuid.
+ */
+async function noShowUndo(ref: InviteeRef, creds: Credentials): Promise<string> {
+  const res = await calendlyRequest<{ resource: Record<string, unknown> }>(
+    `scheduled_events/${ref.eventUuid}/invitees/${ref.inviteeUuid}`,
+    { credentials: creds },
+  );
+  const noShow = res.resource.no_show as { uri?: string } | null | undefined;
+  if (!noShow?.uri) {
+    return renderObject({ status: "invitee not marked as no-show (no-op)", invitee: ref.inviteeUuid });
+  }
+
+  const noShowUuid = uuidFromUri(noShow.uri);
+  try {
+    await calendlyRequest(`invitee_no_shows/${noShowUuid}`, { method: "DELETE", credentials: creds });
+  } catch (err) {
+    if (err instanceof AxiError && err.code === "NOT_FOUND") {
+      return renderObject({ status: "invitee not marked as no-show (no-op)", invitee: ref.inviteeUuid });
+    }
+    throw err;
+  }
+  return renderObject({ status: "no-show cleared", invitee: ref.inviteeUuid });
+}
+
+async function eventsNoShow(parsed: Parsed): Promise<string> {
+  const creds = requireCredentials();
+  const inviteeArg = requirePositional(
+    parsed,
+    0,
+    "invitee",
+    "calendly-axi events no-show <invitee-uri | invitee-uuid --event <event>> [--undo]",
+  );
+  const ref = resolveInviteeRef(inviteeArg, str(parsed, "--event"));
+
+  return bool(parsed, "--undo") ? noShowUndo(ref, creds) : noShowMark(ref, creds);
 }
