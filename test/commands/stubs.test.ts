@@ -11,7 +11,6 @@ import { homeCommand } from "../../src/commands/home.js";
 import { hookCommand } from "../../src/commands/hook.js";
 import { linkCommand } from "../../src/commands/link.js";
 import { typesCommand } from "../../src/commands/types.js";
-import { webhooksCommand } from "../../src/commands/webhooks.js";
 
 beforeEach(() => {
   process.env.CALENDLY_AXI_DISABLE_HOOKS = "1";
@@ -41,7 +40,6 @@ const STUB_COMMANDS: Array<{ name: string; fn: (args: string[]) => unknown; args
   { name: "busy", fn: busyCommand, args: ["--totally-bogus-flag"] },
   { name: "link", fn: linkCommand, args: ["--totally-bogus-flag"] },
   { name: "book", fn: bookCommand, args: ["--totally-bogus-flag"] },
-  { name: "webhooks", fn: webhooksCommand, args: ["--totally-bogus-flag"] },
 ];
 
 describe("command stubs: unknown flag rejection, no API call", () => {
@@ -89,10 +87,6 @@ describe("command stubs: NOT_IMPLEMENTED naming the owning plan", () => {
 
   it("book names book", () => {
     expect(catchErr(() => bookCommand([])).suggestions.join(" ")).toContain("plans/book.md");
-  });
-
-  it("webhooks names webhooks", () => {
-    expect(catchErr(() => webhooksCommand([])).suggestions.join(" ")).toContain("plans/webhooks.md");
   });
 });
 
