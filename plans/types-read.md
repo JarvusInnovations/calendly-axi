@@ -26,8 +26,8 @@ pr: 7
 - [x] `types` lists active types name-ascending with scheduling_url; `--all` adds the active column; `--org` role-gate translated.
 - [x] `types view` truncates a >500-char description with total size + `--full` hint; `--full` shows everything.
 - [x] `types slots` default 7-day window; 32-day request → cap-naming error; empty window → definitive line with widen/availability hints.
-- [ ] Name resolution: exact beats substring; ambiguous substring lists `<uuid> (<name>)` candidates, exit 2; zero → `NOT_FOUND` + `types list` hint (unit-tested against fixtures, spot-checked live).
-- [ ] `types availability <t>` renders rules + timezone readably for the live account.
+- [x] Name resolution: exact beats substring; ambiguous substring lists `<uuid> (<name>)` candidates, exit 2; zero → `NOT_FOUND` + `types list` hint (unit-tested against fixtures, spot-checked live). *(Live spot-check 2026-08-11: `"30 minute virtual meeting"` resolved by exact name across a 27-type account. Live data also surfaced that real ids are mostly canonical lowercase dashed UUIDs — bare-id detection fixed on develop in `fix(types): live-API fixes`.)*
+- [x] `types availability <t>` renders rules + timezone readably for the live account. *(Live-verified 2026-08-11 — weekly rules + intervals render cleanly. `types slots` also live-verified after fixing the strictly-future `start_time` requirement the API enforces — see `fix(types): live-API fixes` on develop.)*
 
 ## Risks / unknowns
 

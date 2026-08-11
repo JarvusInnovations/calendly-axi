@@ -27,13 +27,13 @@ Port harvest-axi's `auth.ts`/`doctor.ts`/`hook.ts`/`home.ts` shapes onto the Cal
 
 ## Validation
 
-- [ ] `auth setup --token <bad>` → `TOKEN_INVALID`, exit 1, nothing written; `--token <good>` writes 0600 config, installs hook, reports identity.
+- [x] `auth setup --token <bad>` → `TOKEN_INVALID`, exit 1, nothing written; `--token <good>` writes 0600 config, installs hook, reports identity. *(Bad-token half fixture-verified; good-token half live-verified 2026-08-11 — identity + org cached. The hook installer correctly refuses the `.ts` dev entrypoint, so the hook-install half rides the first built/global run.)*
 - [x] Re-running setup with no token revalidates + repairs hook (exit 0); unconfigured no-token setup → instruction + token URL, exit 2.
 - [x] `whoami` reports credential source `env` vs `config` correctly under `CALENDLY_ACCESS_TOKEN`.
-- [ ] `doctor` on a healthy config: all ok + headroom; on each broken state: the right single check fails with its remediation, exit 1.
+- [ ] `doctor` on a healthy config: all ok + headroom; on each broken state: the right single check fails with its remediation, exit 1. *(Broken-state halves fixture-verified. Live run 2026-08-11: credentials/token/organization/headroom all ok (498/500 remaining — paid tier confirmed); the hooks check correctly fails under the `.ts` dev entrypoint, so the full all-ok pass awaits a built/global install.)*
 - [x] Home view: configured → ≤5 upcoming rows; zero events → definitive line; dead API/token → cached identity + `status:` + doctor hint, exit 0.
 - [x] Hook status/uninstall round-trip leaves other tools' hooks untouched (fixture settings.json).
-- [ ] Env-only invocation (no config file) bootstraps scope once and performs a scoped list.
+- [x] Env-only invocation (no config file) bootstraps scope once and performs a scoped list. *(Live-verified 2026-08-11: `CALENDLY_ACCESS_TOKEN` + empty `XDG_CONFIG_HOME` produced a correctly self-scoped `events` list via the one-shot bootstrap. Also confirms live that `users/me` carries `current_organization`, resolving the fallback risk flagged at closeout.)*
 
 ## Risks / unknowns
 

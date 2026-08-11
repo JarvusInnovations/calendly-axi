@@ -24,10 +24,10 @@ pr: 6
 ## Validation
 
 - [x] `events` with defaults: header shows resolved scope/window/status; rows sorted ascending; `--since 7d` flips to descending.
-- [ ] `--org` without admin role → role-gate `FORBIDDEN` suggesting dropping `--org` (live check against test account). No live credentials on this machine — the 403→`FORBIDDEN` translation itself is pre-existing, shared code in `client.ts` (untouched by this plan), not independently re-verified against a live role-gate body here.
+- [ ] `--org` without admin role → role-gate `FORBIDDEN` suggesting dropping `--org` (live check against test account). *(Unverifiable on the live account — the connected user is an org admin, so `--org` succeeds (verified live 2026-08-11, org-wide listing returned more events than self scope). The 403 role-gate body can only be captured with a non-admin token; the translation remains fixture-verified.)*
 - [x] `--limit` stop reports "more available" with hints; drained list reports `complete: true`; zero-result output is definitive with scope+window.
 - [x] `events invitees <e> --email <x>` with one match renders Q&A + cancel/reschedule URLs; with several renders the list.
-- [ ] `busy --until 10d` → `VALIDATION_ERROR` naming the 7-day cap; happy path shows both row types against the live account. The cap-error half is unit-tested (including the exact-7-day boundary) and both row types render correctly against fixtures, but the live-account happy path is unverified — no live credentials on this machine. Left unchecked since the criterion as written is a live check.
+- [x] `busy --until 10d` → `VALIDATION_ERROR` naming the 7-day cap; happy path shows both row types against the live account. *(Cap half unit-tested including the exact-7-day boundary; live-verified 2026-08-11 — 25 busy rows including both `calendly` and `external` types against a connected calendar.)*
 - [x] All identifier args accept both UUID and URI — unit-tested (`events view`). No live spot check performed.
 
 ## Risks / unknowns
