@@ -85,11 +85,21 @@ describe("resolveEventTypeIdentifier", () => {
     delete process.env.CALENDLY_ACCESS_TOKEN;
   });
 
-  it("resolves a bare token directly, no API call", async () => {
+  it("resolves a bare legacy token directly, no API call", async () => {
     const spy = vi.spyOn(globalThis, "fetch");
     const { uuid, uri } = await resolveEventTypeIdentifier("GBGB123", {});
     expect(uuid).toBe("GBGB123");
     expect(uri).toBe("https://api.calendly.com/event_types/GBGB123");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("resolves a canonical lowercase dashed UUID directly, no API call", async () => {
+    // Live accounts carry this shape for most event types — a lowercase
+    // UUID must never be misrouted through the name sweep.
+    const spy = vi.spyOn(globalThis, "fetch");
+    const { uuid, uri } = await resolveEventTypeIdentifier("4fce2d6b-c166-4d77-aeae-497a6945a41f", {});
+    expect(uuid).toBe("4fce2d6b-c166-4d77-aeae-497a6945a41f");
+    expect(uri).toBe("https://api.calendly.com/event_types/4fce2d6b-c166-4d77-aeae-497a6945a41f");
     expect(spy).not.toHaveBeenCalled();
   });
 

@@ -19,7 +19,7 @@ Event type management. API contract: [api/event-types](../api/event-types.md). I
 
 `calendly-axi types slots <type> [--from --to | --until <dur>]`
 
-- Default window: next 7 days; cap 31 days per [time windows](../behaviors/time-windows.md).
+- Default window: next 7 days; cap 31 days per [time windows](../behaviors/time-windows.md). The API requires a strictly-future `start_time`, so the default (and any window whose start has already passed but whose end hasn't) is nudged forward to now + 1 minute; an explicit window entirely in the past fails fast naming the future-start requirement.
 - Output: resolved window header, then `slots[N]{start,invitees_remaining}` of available slots (times in profile timezone alongside ISO), `complete: true`.
 - Empty: definitive (`slots: no availability for "<name>" in <window>`), suggesting a wider window or `types availability <uuid>`.
 - Suggestions: `book --type <uuid> --at <start> ...`, `link <uuid>`.

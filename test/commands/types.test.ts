@@ -215,6 +215,26 @@ describe("types slots", () => {
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
 
+  it("nudges the default window's start into the future (API requires strictly-future start_time)", async () => {
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse(TYPE))
+      .mockResolvedValueOnce(jsonResponse({ collection: [] }));
+    const before = Date.now();
+    await typesCommand(["slots", "T1"]);
+    const url = new URL(String(spy.mock.calls[1]![0]));
+    const startTime = new Date(url.searchParams.get("start_time")!).getTime();
+    expect(startTime).toBeGreaterThan(before);
+  });
+
+  it("a window entirely in the past fails fast naming the future-start requirement, no slots call", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse(TYPE));
+    const err = await typesCommand(["slots", "T1", "--from", "2020-01-01", "--to", "2020-01-05"]).catch((e) => e);
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toContain("future");
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
   it("an empty window is a definitive line with widen/availability hints", async () => {
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse(TYPE))

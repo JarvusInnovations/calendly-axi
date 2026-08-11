@@ -267,9 +267,27 @@ async function typesSlots(parsed: Parsed, creds: Credentials): Promise<string> {
     { timeZone: self.timezone, default: { until: "7d" }, capDays: 31 },
   );
 
+  // The API requires a strictly-future start_time (confirmed live —
+  // specs/api/event-types.md). The default window starts "now", which has
+  // already passed by the time the request lands, so nudge a stale-but-
+  // still-open window forward; a window entirely in the past can never
+  // return slots, so it fails fast instead.
+  const floor = new Date(Date.now() + 60_000);
+  let startTime = window.from;
+  if (new Date(window.from) < floor) {
+    if (window.to !== undefined && new Date(window.to) <= floor) {
+      throw new AxiError(
+        "the slots window is entirely in the past — the API only reports future availability",
+        "VALIDATION_ERROR",
+        ["Use a future window, e.g. --until 7d or --from <future-date> --to <future-date>"],
+      );
+    }
+    startTime = floor.toISOString();
+  }
+
   const slotsRes = await calendlyRequest<{ collection: Array<Record<string, unknown>> }>(
     "event_type_available_times",
-    { credentials: creds, query: { event_type: uri, start_time: window.from, end_time: window.to } },
+    { credentials: creds, query: { event_type: uri, start_time: startTime, end_time: window.to } },
   );
   // The endpoint is documented as returning available slots; filter
   // defensively in case a non-"available" status ever shows up.

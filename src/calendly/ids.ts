@@ -91,18 +91,23 @@ export function resolveIdentifier(
 // (later plans: events-write, book).
 
 /**
- * A value that's neither a URI nor this shape is treated as a name to
- * resolve, not a bare UUID/URI to use verbatim: real Calendly UUIDs are
- * uppercase alphanumeric with no punctuation or lowercase letters (e.g.
- * `GBGBDCAADAEDCRZ2`), which is also what every synthetic id used in
- * fixtures/tests looks like. Requiring all-uppercase is what lets a
- * single-word name (`"Meeting"`) still fall through to the sweep instead of
- * being mistaken for a bare id — a human name reliably has at least one
- * lowercase letter. A name that happens to be all-uppercase with no spaces
- * (`"STANDUP"`) is the one known gap — it would 404 as a bad uuid rather
- * than resolving by name.
+ * A value that's neither a URI nor one of these shapes is treated as a name
+ * to resolve, not a bare id to use verbatim. Live Calendly accounts carry
+ * two id shapes side by side: legacy uppercase tokens (`AEFC3UHIYDAV6KFA`)
+ * and canonical lowercase dashed UUIDs (`4fce2d6b-c166-4d77-aeae-...`) —
+ * confirmed against a real account, where most event types use the
+ * canonical form. A human name reliably has a space or at least one
+ * lowercase letter outside the hex-dash alphabet, so single-word names
+ * (`"Meeting"`) still fall through to the sweep. A name that is all-caps
+ * with no spaces (`"STANDUP"`) remains the one known gap — it would 404 as
+ * a bad id rather than resolving by name.
  */
-const BARE_TOKEN_RE = /^[A-Z0-9_-]+$/;
+const LEGACY_TOKEN_RE = /^[A-Z0-9_-]+$/;
+const CANONICAL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isBareId(value: string): boolean {
+  return LEGACY_TOKEN_RE.test(value) || CANONICAL_UUID_RE.test(value);
+}
 
 interface EventTypeCandidate {
   uuid: string;
@@ -167,7 +172,7 @@ export async function resolveEventTypeIdentifier(
   value: string,
   scopeQuery: Record<string, QueryValue>,
 ): Promise<ResolvedIdentifier> {
-  if (isUri(value) || BARE_TOKEN_RE.test(value)) {
+  if (isUri(value) || isBareId(value)) {
     return resolveIdentifier("event_types", value);
   }
   return resolveEventTypeByName(value, scopeQuery);

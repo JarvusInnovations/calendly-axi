@@ -30,7 +30,7 @@ Key resource fields consumed: `uri`, `name`, `active`, `duration`, `duration_opt
 
 | Op | Endpoint | Notes |
 | ---- | ---------- | ------- |
-| Bookable slots | `GET /event_type_available_times` | q: `event_type`* (URI), `start_time`*, `end_time`* — window ≤ **31 days**, no pagination. Returns `collection[]` of `{ status, start_time, invitees_remaining, scheduling_url }` |
+| Bookable slots | `GET /event_type_available_times` | q: `event_type`* (URI), `start_time`*, `end_time`* — window ≤ **31 days**, no pagination, and `start_time` must be **strictly in the future** (confirmed live: "start_time must be in the future"). Returns `collection[]` of `{ status, start_time, invitees_remaining, scheduling_url }` |
 | List schedules | `GET /event_type_availability_schedules` | q: `event_type`* (URI) — the rules currently governing the type |
 | Update schedules | `PATCH /event_type_availability_schedules` | q: `event_type`* (URI); body: `availability_rule` (nested `{ rules[], timezone }` structure) |
 
