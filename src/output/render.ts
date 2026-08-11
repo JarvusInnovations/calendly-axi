@@ -28,6 +28,16 @@ export function renderObject(value: Record<string, unknown>): string {
 }
 
 /**
+ * Drop `undefined`-valued keys from an object before rendering, so a detail
+ * view only shows fields the API actually returned rather than an explicit
+ * `field: undefined` — safer than trusting the TOON encoder's handling of
+ * absent values, and cleaner output either way.
+ */
+export function compact<T extends Record<string, unknown>>(obj: T): T {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
+}
+
+/**
  * Render a help array as a multi-line `help[N]:` block — the canonical AXI
  * form used by the first-party chrome-devtools-axi and slack-axi. Formatted
  * manually because `encode()` inlines primitive arrays (`help[N]: a,b,c`);

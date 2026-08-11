@@ -157,18 +157,29 @@ export async function resolveUserFlag(value: string, self: ProfileCache, credent
  * Which combinations an endpoint actually accepts is a per-command decision
  * (see scoping.md "Details") — this resolver returns whatever was asked
  * for; commands validate/reject unsupported combinations themselves.
+ *
+ * `self`, when passed, is used instead of calling `resolveSelf` again — the
+ * caller has already resolved its own identity (e.g. for a header label or
+ * the profile timezone) and scoping.md promises the `users/me` bootstrap
+ * runs **once per invocation**; without this, an uncached (env-token-only)
+ * call site that also needs `self` for its own purposes would trigger two
+ * live bootstrap calls instead of one.
  */
-export async function resolveScope(flags: ScopeFlags, credentials: Credentials): Promise<ResolvedScope> {
-  const self = await resolveSelf(credentials);
+export async function resolveScope(
+  flags: ScopeFlags,
+  credentials: Credentials,
+  self?: ProfileCache,
+): Promise<ResolvedScope> {
+  const resolvedSelf = self ?? (await resolveSelf(credentials));
   const scope: ResolvedScope = {};
 
   if (flags.org) {
-    scope.organization = self.organization_uri;
+    scope.organization = resolvedSelf.organization_uri;
   }
   if (flags.user) {
-    scope.user = await resolveUserFlag(flags.user, self, credentials);
+    scope.user = await resolveUserFlag(flags.user, resolvedSelf, credentials);
   } else if (!flags.org) {
-    scope.user = self.user_uri;
+    scope.user = resolvedSelf.user_uri;
   }
 
   return scope;

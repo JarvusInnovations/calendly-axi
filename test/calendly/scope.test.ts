@@ -205,4 +205,25 @@ describe("resolveScope", () => {
     expect(scope).toEqual({ user: "https://api.calendly.com/users/ABC123" });
     expect(spy).toHaveBeenCalledTimes(1);
   });
+
+  it("reuses a caller-provided self profile instead of resolving it again", async () => {
+    // No cache seeded, and no fetch mock queued at all — if resolveScope
+    // called resolveSelf internally it would either throw (nothing to
+    // return) or hit the network; passing `self` must skip that entirely.
+    const spy = vi.spyOn(globalThis, "fetch");
+    const providedSelf = {
+      user_uri: "https://api.calendly.com/users/PROVIDED",
+      user_uuid: "PROVIDED",
+      name: "Provided Self",
+      email: "provided@example.com",
+      scheduling_url: "https://calendly.com/provided",
+      timezone: "UTC",
+      organization_uri: "https://api.calendly.com/organizations/PORG",
+      organization_uuid: "PORG",
+      cached_at: new Date().toISOString(),
+    };
+    const scope = await resolveScope({}, CREDS, providedSelf);
+    expect(scope).toEqual({ user: "https://api.calendly.com/users/PROVIDED" });
+    expect(spy).not.toHaveBeenCalled();
+  });
 });
