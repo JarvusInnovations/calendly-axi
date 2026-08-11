@@ -45,58 +45,18 @@ const STUB_COMMANDS: Array<{ name: string; fn: (args: string[]) => unknown; args
 ];
 
 describe("command stubs: unknown flag rejection, no API call", () => {
-  it.each(STUB_COMMANDS)("$name rejects an unknown flag without making a request", ({ fn, args }) => {
+  it.each(STUB_COMMANDS)("$name rejects an unknown flag without making a request", async ({ fn, args }) => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
-    try {
-      fn(args);
-      throw new Error("should have thrown on an unknown flag");
-    } catch (err) {
-      expect((err as { code: string }).code).toBe("UNKNOWN_FLAG");
-    }
+    // Wrapped in a resolved promise so this works uniformly whether `fn`
+    // throws synchronously (the remaining stubs) or returns a rejected
+    // promise (auth/doctor/hook/home, now real `async` implementations) —
+    // flag validation is always the first, synchronous thing either does.
+    await expect(Promise.resolve().then(() => fn(args))).rejects.toMatchObject({ code: "UNKNOWN_FLAG" });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
 
 describe("command stubs: NOT_IMPLEMENTED naming the owning plan", () => {
-  it("home names auth-identity", () => {
-    expect(() => homeCommand([])).toThrowError(expect.objectContaining({ code: "NOT_IMPLEMENTED" }));
-    try {
-      homeCommand([]);
-    } catch (err) {
-      expect((err as { suggestions: string[] }).suggestions.join(" ")).toContain("auth-identity");
-    }
-  });
-
-  it("doctor names auth-identity", () => {
-    try {
-      doctorCommand([]);
-      throw new Error("should have thrown");
-    } catch (err) {
-      expect((err as { suggestions: string[] }).suggestions.join(" ")).toContain("auth-identity");
-    }
-  });
-
-  it("auth setup/whoami/logout all name auth-identity", () => {
-    for (const sub of ["setup", "whoami", "logout"]) {
-      try {
-        authCommand([sub]);
-        throw new Error("should have thrown");
-      } catch (err) {
-        expect((err as { suggestions: string[] }).suggestions.join(" ")).toContain("auth-identity");
-      }
-    }
-  });
-
-  it("hook defaults to status and names auth-identity", () => {
-    try {
-      hookCommand([]);
-      throw new Error("should have thrown");
-    } catch (err) {
-      expect((err as { message: string }).message).toContain("hook status");
-      expect((err as { suggestions: string[] }).suggestions.join(" ")).toContain("auth-identity");
-    }
-  });
-
   it("types read subcommands name types-read; writes name types-write", () => {
     for (const sub of ["list", "view", "slots", "availability"]) {
       const err = catchErr(() => typesCommand(sub === "list" ? [] : [sub, "x"]));
