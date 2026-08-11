@@ -21,7 +21,7 @@ Scheduled-event reads and fallout management. API contract: [api/scheduled-event
 
 - Drains the cursor. Default schema: `invitees[N]{uuid,name,email,status,no_show}` (`no_show`: yes/no).
 - Q&A answers appear in the single-invitee detail path: `events invitees <event> --email <e>` with exactly one match renders full detail including `questions_and_answers`, `cancel_url`, `reschedule_url`, reschedule chain.
-- Suggestions: `events no-show <invitee-uuid>`, `events cancel <event-uuid>`.
+- Suggestions: `events no-show <invitee-uri>`, `events cancel <event-uuid>`.
 
 ## events cancel
 
@@ -35,7 +35,8 @@ Scheduled-event reads and fallout management. API contract: [api/scheduled-event
 
 `calendly-axi events no-show <invitee> [--undo]`
 
-- Marks the invitee (UUID/URI) as a no-show; `--undo` resolves the invitee's `no_show.uri` and deletes it.
+- `<invitee>` accepts the invitee's **full URI** only (`https://api.calendly.com/scheduled_events/<event-uuid>/invitees/<invitee-uuid>`), printed by `events invitees <event>` (list rows' `uuid` column plus the `--email` detail view's `uri` field). Calendly nests every invitee URI under its event and exposes no flat `GET /invitees/{uuid}`, so a bare invitee UUID has no event context to resolve against — it fails fast with `VALIDATION_ERROR` pointing at `events invitees <event>`.
+- Marks the invitee as a no-show; `--undo` parses the event + invitee uuids out of the URI, fetches the invitee record, and deletes via its `no_show.uri`.
 - Already in the desired state → no-op, exit 0.
 
 ## Principles
