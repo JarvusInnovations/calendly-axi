@@ -55,11 +55,11 @@ describe("command stubs: unknown flag rejection, no API call", () => {
 });
 
 describe("command stubs: NOT_IMPLEMENTED naming the owning plan", () => {
-  it("types read subcommands name types-read; writes name types-write", () => {
-    for (const sub of ["list", "view", "slots", "availability"]) {
-      const err = catchErr(() => typesCommand(sub === "list" ? [] : [sub, "x"]));
-      expect(err.suggestions.join(" ")).toContain("types-read");
-    }
+  // `types list|view|slots|availability` (read path) are implemented as of
+  // `types-read` — see test/commands/types.test.ts. `create`/`update` and
+  // availability's `--rules` write path remain stubs, landing with
+  // `types-write`.
+  it("types create/update name types-write", () => {
     for (const sub of ["create", "update"]) {
       const err = catchErr(() => typesCommand([sub]));
       expect(err.suggestions.join(" ")).toContain("types-write");
