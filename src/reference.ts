@@ -127,24 +127,32 @@ export const COMMAND_GROUPS: CommandGroup[] = [
         usage: "auth [setup|whoami|logout] [flags]",
         summary: "Connect, inspect, or remove the stored Calendly Personal Access Token",
         flags: [
-          "--token <pat>   Personal Access Token (setup)",
+          "--token <pat>   Personal Access Token (setup) — https://calendly.com/integrations/api_webhooks",
           "--refresh       re-fetch identity instead of using the cache (whoami)",
         ],
         examples: [
           "calendly-axi auth setup --token <pat>",
+          "calendly-axi auth setup   (no token, already configured: revalidate + repair the hook)",
           "calendly-axi auth whoami",
+          "calendly-axi auth whoami --refresh",
           "calendly-axi auth logout",
         ],
       },
       {
         usage: "doctor",
-        summary: "Ordered health checks: credentials, token, organization, rate-limit headroom, hooks",
+        summary:
+          "Five ordered health checks — credentials, token, organization, rate-limit headroom, hooks — exit 1 on any failure",
         examples: ["calendly-axi doctor"],
       },
       {
         usage: "hook [install|status|uninstall]",
-        summary: "Manage the SessionStart hook that injects the home view at session start",
-        examples: ["calendly-axi hook status", "calendly-axi hook install"],
+        summary:
+          "Manage the SessionStart hook (Claude Code, Codex, OpenCode) that injects the home view at session start",
+        examples: [
+          "calendly-axi hook status",
+          "calendly-axi hook install",
+          "calendly-axi hook uninstall",
+        ],
       },
     ],
   },
