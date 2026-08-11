@@ -80,9 +80,7 @@ describe("command stubs: NOT_IMPLEMENTED naming the owning plan", () => {
     expect(catchErr(() => linkCommand(["x"])).suggestions.join(" ")).toContain("events-write");
   });
 
-  it("book names book", () => {
-    expect(catchErr(() => bookCommand([])).suggestions.join(" ")).toContain("plans/book.md");
-  });
+  // `book` is implemented as of the `book` plan — see test/commands/book.test.ts.
 });
 
 function catchErr(fn: () => unknown): { code: string; message: string; suggestions: string[] } {

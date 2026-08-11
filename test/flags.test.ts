@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bool, parseFlags, parseSubcommand, requirePositional, str } from "../src/flags.js";
+import { bool, multiStr, parseFlags, parseSubcommand, requirePositional, str } from "../src/flags.js";
 
 describe("parseFlags", () => {
   it("parses declared value and boolean flags", () => {
@@ -49,6 +49,53 @@ describe("parseFlags", () => {
   it("treats a lone -- as the positional separator", () => {
     const parsed = parseFlags("link", ["--", "--not-a-flag"], {});
     expect(parsed.positional).toEqual(["--not-a-flag"]);
+  });
+});
+
+describe("parseFlags: multi (repeatable) flags", () => {
+  it("accumulates repeated occurrences in order, instead of last-wins", () => {
+    const parsed = parseFlags("book", ["--answer", "0=Acme", "--answer", "1=Referral"], {
+      multi: ["--answer"],
+    });
+    expect(multiStr(parsed, "--answer")).toEqual(["0=Acme", "1=Referral"]);
+  });
+
+  it("multiStr returns an empty array when the flag was never given", () => {
+    const parsed = parseFlags("book", [], { multi: ["--answer"] });
+    expect(multiStr(parsed, "--answer")).toEqual([]);
+  });
+
+  it("supports --flag=value inline syntax for repeated occurrences", () => {
+    const parsed = parseFlags("book", ["--answer=0=Acme", "--answer=1=Referral"], { multi: ["--answer"] });
+    expect(multiStr(parsed, "--answer")).toEqual(["0=Acme", "1=Referral"]);
+  });
+
+  it("a single occurrence still yields a one-element array", () => {
+    const parsed = parseFlags("book", ["--answer", "0=Acme"], { multi: ["--answer"] });
+    expect(multiStr(parsed, "--answer")).toEqual(["0=Acme"]);
+  });
+
+  it("rejects a missing value for a multi flag", () => {
+    expect(() => parseFlags("book", ["--answer"], { multi: ["--answer"] })).toThrowError(
+      expect.objectContaining({ code: "USAGE" }),
+    );
+  });
+
+  it("lists multi flags alongside value/boolean flags in the unknown-flag hint", () => {
+    try {
+      parseFlags("book", ["--nope"], { value: ["--type"], multi: ["--answer"] });
+      throw new Error("should have thrown");
+    } catch (err) {
+      const suggestions = (err as { suggestions: string[] }).suggestions.join(" ");
+      expect(suggestions).toContain("--answer");
+      expect(suggestions).toContain("--type");
+    }
+  });
+
+  it("does not leak multi values into flags[name] (str/bool stay unaware of multi flags)", () => {
+    const parsed = parseFlags("book", ["--answer", "0=Acme"], { multi: ["--answer"] });
+    expect(str(parsed, "--answer")).toBeUndefined();
+    expect(bool(parsed, "--answer")).toBe(false);
   });
 });
 
