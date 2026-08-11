@@ -5,6 +5,12 @@ export interface FlagSpec {
   value?: string[];
   /** Flags that are standalone switches, e.g. `--org`. */
   boolean?: string[];
+  /**
+   * Repeatable value flags, e.g. `--answer 0=x --answer 1=y` — every
+   * occurrence accumulates into a `string[]` (read back via `multiStr`)
+   * instead of the value-flag last-wins behavior.
+   */
+  multi?: string[];
   /** Renamed or removed flags mapped to a targeted hint. */
   deprecated?: Record<string, string>;
 }
@@ -12,6 +18,8 @@ export interface FlagSpec {
 export interface Parsed {
   positional: string[];
   flags: Record<string, string | true>;
+  /** Values collected from `multi`-declared flags, in the order given. */
+  multi: Record<string, string[]>;
 }
 
 /** `--help` is universal and never reported as unknown (AXI §6). */
@@ -28,11 +36,13 @@ const ALWAYS_ALLOWED = new Set(["--help", "-h"]);
 export function parseFlags(command: string, argv: string[], spec: FlagSpec): Parsed {
   const valueFlags = new Set(spec.value ?? []);
   const boolFlags = new Set(spec.boolean ?? []);
+  const multiFlags = new Set(spec.multi ?? []);
   const deprecated = spec.deprecated ?? {};
-  const known = [...valueFlags, ...boolFlags].sort();
+  const known = [...valueFlags, ...boolFlags, ...multiFlags].sort();
 
   const positional: string[] = [];
   const flags: Record<string, string | true> = {};
+  const multi: Record<string, string[]> = {};
 
   const unknown = (name: string): never => {
     const hint = deprecated[name];
@@ -98,10 +108,28 @@ export function parseFlags(command: string, argv: string[], spec: FlagSpec): Par
       continue;
     }
 
+    if (multiFlags.has(name)) {
+      let value: string;
+      if (inlineValue !== undefined) {
+        value = inlineValue;
+      } else {
+        const next = argv[i + 1];
+        if (next === undefined || next.startsWith("-")) {
+          throw new AxiError(`${name} requires a value`, "USAGE", [
+            `Run \`calendly-axi ${command} ${name} <value>\``,
+          ]);
+        }
+        value = next;
+        i++;
+      }
+      (multi[name] ??= []).push(value);
+      continue;
+    }
+
     unknown(name);
   }
 
-  return { positional, flags };
+  return { positional, flags, multi };
 }
 
 /** Read a value flag as a string, or fall back to a default. */
@@ -115,6 +143,11 @@ export function str(parsed: Parsed, name: string, fallback?: string): string | u
 /** True when a boolean (or value, if simply present) flag was supplied. */
 export function bool(parsed: Parsed, name: string): boolean {
   return parsed.flags[name] !== undefined;
+}
+
+/** Read all values collected for a `multi`-declared flag, in the order given (empty array if absent). */
+export function multiStr(parsed: Parsed, name: string): string[] {
+  return parsed.multi[name] ?? [];
 }
 
 /** Require the Nth positional argument, or fail with usage. */
@@ -224,7 +257,11 @@ export const BUSY_FLAGS: FlagSpec = {
 export const LINK_FLAGS: FlagSpec = {};
 
 export const BOOK_FLAGS: FlagSpec = {
-  value: ["--type", "--at", "--name", "--email", "--timezone", "--location", "--answer", "--guests"],
+  value: ["--type", "--at", "--name", "--email", "--timezone", "--location", "--guests"],
+  // Repeatable — `--answer <position>=<text>` maps to the event type's
+  // custom questions by position, so a repeated flag must accumulate
+  // rather than last-win. See specs/commands/book.md.
+  multi: ["--answer"],
 };
 
 export const WEBHOOKS_FLAGS: Record<string, FlagSpec> = {
