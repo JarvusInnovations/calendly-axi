@@ -212,7 +212,7 @@ function webhookDetailFields(resource: Record<string, unknown>): Record<string, 
 const SAMPLE_MAX_CHARS = 4000;
 
 function renderSample(event: string, payload: unknown): string {
-  const json = JSON.stringify(payload, null, 2);
+  const json = JSON.stringify(payload ?? null, null, 2);
   if (json.length <= SAMPLE_MAX_CHARS) {
     return joinBlocks(renderObject({ event }), `payload:\n${json}`);
   }
@@ -373,12 +373,14 @@ async function webhooksSample(parsed: Parsed): Promise<string> {
 
   const scopeParams = await resolveWebhookScope(parsed, creds);
 
-  const res = await calendlyRequest<{ resource: unknown }>("sample_webhook_data", {
+  // The response is the delivery envelope itself, unwrapped — NOT inside the
+  // usual `{ resource }` wrapper (confirmed live; see specs/api/webhooks.md).
+  const envelope = await calendlyRequest<Record<string, unknown>>("sample_webhook_data", {
     credentials: creds,
     query: { event, ...scopeQuery(scopeParams) },
   });
 
-  return renderSample(event, res.resource);
+  return renderSample(event, envelope);
 }
 
 export async function webhooksCommand(args: string[]): Promise<string> {

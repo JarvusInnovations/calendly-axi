@@ -308,8 +308,10 @@ describe("webhooks delete", () => {
 describe("webhooks sample", () => {
   it("fetches and renders a sample payload as a JSON block", async () => {
     seedProfile();
-    const payload = { event: "invitee.created", payload: { invitee: { name: "Ada Lovelace" } } };
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse({ resource: payload }));
+    // The live endpoint returns the delivery envelope unwrapped — no
+    // `resource` wrapper (specs/api/webhooks.md, confirmed live).
+    const payload = { event: "invitee.created", created_at: "2026-08-11T00:00:00Z", payload: { invitee: { name: "Ada Lovelace" } } };
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse(payload));
     const out = await webhooksCommand(["sample", "--event", "invitee.created"]);
     expect(out).toContain("event: invitee.created");
     expect(out).toContain("Ada Lovelace");
@@ -318,7 +320,7 @@ describe("webhooks sample", () => {
   it("caps an enormous payload with a total-size note", async () => {
     seedProfile();
     const huge = { event: "invitee.created", blob: "x".repeat(10_000) };
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse({ resource: huge }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse(huge));
     const out = await webhooksCommand(["sample", "--event", "invitee.created"]);
     expect(out).toContain("truncated");
     expect(out).toMatch(/of \d+ chars total/);

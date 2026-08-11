@@ -10,7 +10,7 @@ Everything under `webhooks`. Wrapping, pagination, and errors per [conventions](
 | Create | `POST /webhook_subscriptions` | body required: `url` (HTTPS callback), `events[]`, `organization` (URI), `scope`; optional: `user` (required when scope=user), `group`, `signing_key` |
 | Get | `GET /webhook_subscriptions/{uuid}` | |
 | Delete | `DELETE /webhook_subscriptions/{uuid}` | |
-| Sample payload | `GET /sample_webhook_data` | q: `event`*, `organization`*, `scope`*, `user`, `group` — a realistic payload without waiting for a real booking |
+| Sample payload | `GET /sample_webhook_data` | q: `event`*, `organization`*, `scope`*, `user`, `group` — a realistic payload without waiting for a real booking. **Response is the delivery envelope itself, unwrapped** (`{ event, created_at, created_by, payload }`) — not inside the usual `resource` wrapper (confirmed live) |
 
 Subscription resource fields consumed: `uri`, `callback_url`, `state` (`active` \| `disabled`), `events[]`, `scope`, `organization`, `user`, `creator`, `created_at`, `retry_started_at`.
 
