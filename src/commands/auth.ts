@@ -108,7 +108,9 @@ async function authWhoami(parsed: Parsed) {
 }
 
 function authLogout() {
-  const hadConfig = resolveCredentials()?.source === "config";
+  // Read the config directly — an env token would mask a stored one in
+  // resolveCredentials(), and we must report the file removal accurately.
+  const hadConfig = !!readConfig().token;
   const envStillSet = !!process.env.CALENDLY_ACCESS_TOKEN;
   clearConfig();
   return renderObject({

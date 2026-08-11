@@ -165,4 +165,12 @@ describe("auth logout", () => {
     const out = await authCommand(["logout"]);
     expect(out).toContain("CALENDLY_ACCESS_TOKEN is still set");
   });
+
+  it("reports the config removal accurately even when an env token masks it", async () => {
+    writeConfig({ version: 1, token: "stored_tok" });
+    process.env.CALENDLY_ACCESS_TOKEN = "env_tok";
+    const out = await authCommand(["logout"]);
+    expect(out).toContain("logged out (credentials removed)");
+    expect(existsSync(configPath())).toBe(false);
+  });
 });

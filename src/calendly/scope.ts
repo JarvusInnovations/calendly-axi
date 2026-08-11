@@ -131,9 +131,11 @@ async function resolveUserFlag(value: string, self: ProfileCache, credentials: C
     ]);
   }
   if (hits.length > 1) {
+    // Ambiguity is a usage problem, not a missing resource — mirror the
+    // multi-candidate treatment in identifier-resolution.md (exit 2).
     throw new AxiError(
       `Multiple organization members match "${value}"`,
-      "NOT_FOUND",
+      "VALIDATION_ERROR",
       hits.map((h) => `${h.user.uri}${h.user.name ? ` (${h.user.name})` : ""}`),
     );
   }

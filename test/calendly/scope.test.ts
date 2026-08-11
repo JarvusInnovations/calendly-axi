@@ -184,7 +184,7 @@ describe("resolveScope", () => {
     await expect(resolveScope({ user: "nobody@example.com" }, CREDS)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
-  it("--user <email> with multiple hits throws NOT_FOUND listing candidates", async () => {
+  it("--user <email> with multiple hits throws VALIDATION_ERROR listing candidates", async () => {
     seedCache();
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
       jsonResponse({
@@ -195,7 +195,7 @@ describe("resolveScope", () => {
       }),
     );
     const err = await resolveScope({ user: "dup@example.com" }, CREDS).catch((e) => e);
-    expect(err.code).toBe("NOT_FOUND");
+    expect(err.code).toBe("VALIDATION_ERROR");
     expect(err.suggestions).toHaveLength(2);
   });
 
