@@ -55,16 +55,9 @@ describe("command stubs: unknown flag rejection, no API call", () => {
 });
 
 describe("command stubs: NOT_IMPLEMENTED naming the owning plan", () => {
-  // `types list|view|slots|availability` (read path) are implemented as of
-  // `types-read` — see test/commands/types.test.ts. `create`/`update` and
-  // availability's `--rules` write path remain stubs, landing with
-  // `types-write`.
-  it("types create/update name types-write", () => {
-    for (const sub of ["create", "update"]) {
-      const err = catchErr(() => typesCommand([sub]));
-      expect(err.suggestions.join(" ")).toContain("types-write");
-    }
-  });
+  // `types` (list/view/slots/availability reads and create/update/availability
+  // --rules writes) is fully implemented as of `types-write` — see
+  // test/commands/types.test.ts. No stub coverage remains for it here.
 
   it("events cancel/no-show name events-write (list/view/invitees are implemented — see events.test.ts)", async () => {
     for (const sub of ["cancel", "no-show"]) {

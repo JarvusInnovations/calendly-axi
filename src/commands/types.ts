@@ -1,30 +1,22 @@
+import { readFileSync } from "node:fs";
 import { AxiError } from "axi-sdk-js";
 import { calendlyRequest, requireCredentials } from "../calendly/client.js";
-import { resolveEventTypeIdentifier, uuidFromUri } from "../calendly/ids.js";
+import { resolveEventTypeIdentifier, resolveIdentifier, uuidFromUri } from "../calendly/ids.js";
 import { paginate, paginationSummary } from "../calendly/paginate.js";
 import { resolveScope, resolveSelf } from "../calendly/scope.js";
 import type { Credentials } from "../config.js";
 import { bool, parseSubcommand, requirePositional, str, TYPES_FLAGS, type Parsed } from "../flags.js";
 import { computed, field, joinBlocks, renderHelp, renderListResponse, renderObject } from "../output/index.js";
 import { resolveWindow } from "../time/windows.js";
-import { notImplemented } from "./not-implemented.js";
 
 /**
  * `types list|view|slots|create|update|availability` — see
- * `specs/commands/types.md`. Reads (incl. name resolution) land with
- * `types-read`; create/update and the availability *write* path (`--rules`)
- * land with `types-write`.
- *
- * Not declared `async` itself: `create`/`update` and an unconfigured token
- * must fail synchronously (matching every other command stub), while the
- * implemented read paths return the promise their handler produces.
+ * `specs/commands/types.md`. Reads (incl. name resolution) landed with
+ * `types-read`; `create`/`update` and the availability *write* path
+ * (`--rules`) land here with `types-write`.
  */
 export function typesCommand(args: string[]): Promise<string> {
   const { sub, parsed } = parseSubcommand("types", args, TYPES_FLAGS, "list");
-
-  if (sub === "create" || sub === "update") {
-    return notImplemented(`types ${sub}`, "types-write");
-  }
 
   const creds = requireCredentials();
 
@@ -35,6 +27,10 @@ export function typesCommand(args: string[]): Promise<string> {
       return typesView(parsed, creds);
     case "slots":
       return typesSlots(parsed, creds);
+    case "create":
+      return typesCreate(parsed, creds);
+    case "update":
+      return typesUpdate(parsed, creds);
     case "availability":
       return typesAvailability(parsed, creds);
     default:
@@ -58,6 +54,42 @@ interface EventTypeResource {
   locations?: Array<Record<string, unknown>>;
   custom_questions?: Array<{ position: number; name: string; type: string; required: boolean }>;
   profile?: { owner?: string };
+}
+
+// ── JSON flag reading (`<json|@file>`) ──────────────────────────────
+// Shared by `--locations` (create/update) and `--rules` (availability) per
+// specs/commands/types.md's "nested structures ride JSON" principle.
+// Parsed eagerly, before any network call, so malformed input fails fast
+// (VALIDATION_ERROR, exit 2) rather than after a wasted round trip.
+
+/**
+ * Parse a `<json|@file>` flag value: `@path` reads and parses the file at
+ * `path`; anything else is parsed as inline JSON. Both the read and the
+ * parse are synchronous and network-free.
+ */
+function readJsonFlag(raw: string, flag: string): unknown {
+  let text = raw;
+  if (raw.startsWith("@")) {
+    const path = raw.slice(1);
+    try {
+      text = readFileSync(path, "utf8");
+    } catch (err) {
+      throw new AxiError(
+        `Could not read ${flag} file "${path}": ${err instanceof Error ? err.message : String(err)}`,
+        "VALIDATION_ERROR",
+        [`Check the path, or pass ${flag} inline JSON instead of @<file>`],
+      );
+    }
+  }
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    throw new AxiError(
+      `${flag} is not valid JSON${raw.startsWith("@") ? ` (from "${raw}")` : ""}: ${err instanceof Error ? err.message : String(err)}`,
+      "VALIDATION_ERROR",
+      [`Pass ${flag} inline JSON (quoted) or @path/to/file.json`],
+    );
+  }
 }
 
 // ── types list ───────────────────────────────────────────────────────
@@ -265,7 +297,213 @@ async function typesSlots(parsed: Parsed, creds: Credentials): Promise<string> {
   });
 }
 
-// ── types availability (read path; --rules write path is types-write) ──
+// ── types create ─────────────────────────────────────────────────────
+
+const DATE_RANGE_RE = /^(\d{4}-\d{2}-\d{2})(?:\.\.(\d{4}-\d{2}-\d{2}))?$/;
+
+/**
+ * Parse `--date <YYYY-MM-DD>[..<YYYY-MM-DD>]` into the `one_off_event_types`
+ * `date_setting` body. The exact shape this endpoint wants is loosely
+ * documented (see `plans/types-write.md` Risks) — this uses
+ * `{ type: "date_range", start_date, end_date }` with `start_date ===
+ * end_date` for a single date, unverified against a live account.
+ */
+function parseOneOffDate(raw: string): Record<string, unknown> {
+  const match = DATE_RANGE_RE.exec(raw);
+  if (!match) {
+    throw new AxiError(`--date "${raw}" is not a valid date or date range`, "VALIDATION_ERROR", [
+      "Pass a single date (--date 2026-08-18) or a range (--date 2026-08-18..2026-08-20)",
+    ]);
+  }
+  const start_date = match[1]!;
+  const end_date = match[2] ?? start_date;
+  return { type: "date_range", start_date, end_date };
+}
+
+function parseCoHosts(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0)
+    .map((id) => resolveIdentifier("users", id, "co-host").uri);
+}
+
+function requiredDuration(parsed: Parsed): number {
+  const raw = str(parsed, "--duration");
+  if (!raw) {
+    throw new AxiError("--duration is required", "VALIDATION_ERROR", [
+      "Run `calendly-axi types create --name <name> --duration <minutes>`",
+    ]);
+  }
+  const duration = Number(raw);
+  if (!Number.isFinite(duration) || duration <= 0) {
+    throw new AxiError(`--duration "${raw}" must be a positive number of minutes`, "VALIDATION_ERROR", []);
+  }
+  return duration;
+}
+
+function requiredName(parsed: Parsed, usage: string): string {
+  const name = str(parsed, "--name");
+  if (!name) {
+    throw new AxiError("--name is required", "VALIDATION_ERROR", [`Run \`calendly-axi ${usage}\``]);
+  }
+  return name;
+}
+
+async function typesCreate(parsed: Parsed, creds: Credentials): Promise<string> {
+  const oneOff = bool(parsed, "--one-off");
+
+  // Network-free validation first, so malformed input (JSON, date) fails
+  // before any request — including the `resolveSelf` bootstrap call.
+  const name = requiredName(
+    parsed,
+    oneOff
+      ? "types create --one-off --name <name> --duration <minutes> --date <date>"
+      : "types create --name <name> --duration <minutes>",
+  );
+  const duration = requiredDuration(parsed);
+  const locationsRaw = str(parsed, "--locations");
+  const locations = locationsRaw !== undefined ? readJsonFlag(locationsRaw, "--locations") : undefined;
+
+  if (oneOff) {
+    const dateRaw = str(parsed, "--date");
+    if (!dateRaw) {
+      throw new AxiError("--date is required with --one-off", "VALIDATION_ERROR", [
+        "Run `calendly-axi types create --one-off --name <name> --duration <minutes> --date <date>`",
+      ]);
+    }
+    const dateSetting = parseOneOffDate(dateRaw);
+    const coHostsRaw = str(parsed, "--co-hosts");
+    const coHosts = coHostsRaw !== undefined ? parseCoHosts(coHostsRaw) : undefined;
+
+    const self = await resolveSelf(creds);
+    const body: Record<string, unknown> = { name, host: self.user_uri, duration, date_setting: dateSetting };
+    const timezone = str(parsed, "--timezone");
+    if (timezone) body.timezone = timezone;
+    if (coHosts?.length) body.co_hosts = coHosts;
+    if (locations !== undefined) body.location = locations;
+
+    const res = await calendlyRequest<{ resource: EventTypeResource }>("one_off_event_types", {
+      method: "POST",
+      credentials: creds,
+      body,
+    });
+    return renderEventTypeDetail(res.resource, false);
+  }
+
+  const self = await resolveSelf(creds);
+  const body: Record<string, unknown> = { name, owner: self.user_uri, duration };
+  const description = str(parsed, "--description");
+  if (description) body.description = description;
+  const color = str(parsed, "--color");
+  if (color) body.color = color;
+  if (locations !== undefined) body.locations = locations;
+  if (bool(parsed, "--inactive")) body.active = false;
+
+  const res = await calendlyRequest<{ resource: EventTypeResource }>("event_types", {
+    method: "POST",
+    credentials: creds,
+    body,
+  });
+  return renderEventTypeDetail(res.resource, false);
+}
+
+// ── types update ─────────────────────────────────────────────────────
+
+async function typesUpdate(parsed: Parsed, creds: Credentials): Promise<string> {
+  const typeArg = requirePositional(
+    parsed,
+    0,
+    "<type>",
+    "calendly-axi types update <type> [--name --duration --description --color --locations --active|--inactive]",
+  );
+
+  if (bool(parsed, "--active") && bool(parsed, "--inactive")) {
+    throw new AxiError("--active and --inactive are mutually exclusive", "VALIDATION_ERROR", [
+      "Pass one or the other, not both",
+    ]);
+  }
+
+  // Network-free field prep — locations JSON and duration numeric parsing
+  // fail before the GET this handler needs for the no-op check.
+  const name = str(parsed, "--name");
+  const durationRaw = str(parsed, "--duration");
+  const duration = durationRaw !== undefined ? Number(durationRaw) : undefined;
+  if (duration !== undefined && (!Number.isFinite(duration) || duration <= 0)) {
+    throw new AxiError(`--duration "${durationRaw}" must be a positive number of minutes`, "VALIDATION_ERROR", []);
+  }
+  const description = str(parsed, "--description");
+  const color = str(parsed, "--color");
+  const locationsRaw = str(parsed, "--locations");
+  const locations = locationsRaw !== undefined ? readJsonFlag(locationsRaw, "--locations") : undefined;
+
+  const self = await resolveSelf(creds);
+  const { uuid } = await resolveEventTypeIdentifier(typeArg, { user: self.user_uri });
+
+  const current = await calendlyRequest<{ resource: EventTypeResource }>(`event_types/${uuid}`, {
+    credentials: creds,
+  });
+
+  // Solo-only boundary (specs/api/event-types.md): known from the GET we
+  // already needed for the no-op check, so this fails fast with zero PATCH
+  // attempts rather than papering over the 400 the API would otherwise
+  // return — see specs/principles.md "The API's boundaries are spec'd, not
+  // papered over".
+  if (current.resource.kind !== "solo") {
+    throw new AxiError(
+      `"${current.resource.name}" is a ${current.resource.kind} event type — only solo types can be updated via the API`,
+      "VALIDATION_ERROR",
+      [
+        "Group/collective/round-robin event types are read-only via the Calendly API",
+        `Run \`calendly-axi types view ${uuid}\` to confirm the type's kind`,
+      ],
+    );
+  }
+
+  const body: Record<string, unknown> = {};
+  if (name !== undefined) body.name = name;
+  if (duration !== undefined) body.duration = duration;
+  if (description !== undefined) body.description = description;
+  if (color !== undefined) body.color = color;
+  if (locations !== undefined) body.locations = locations;
+  if (bool(parsed, "--active") || bool(parsed, "--inactive")) {
+    body.active = bool(parsed, "--active");
+  }
+
+  const nonActiveFieldCount = Object.keys(body).filter((k) => k !== "active").length;
+  const activeIsNoop = !("active" in body) || body.active === current.resource.active;
+  if (nonActiveFieldCount === 0 && activeIsNoop) {
+    return renderObject({
+      status: `no-op — ${uuid} already reflects the requested state`,
+      active: current.resource.active,
+    });
+  }
+
+  try {
+    const res = await calendlyRequest<{ resource: EventTypeResource }>(`event_types/${uuid}`, {
+      method: "PATCH",
+      credentials: creds,
+      body,
+    });
+    return renderEventTypeDetail(res.resource, false);
+  } catch (err) {
+    // Defense in depth: the `kind` check above should catch the solo-only
+    // boundary before any request, but if the API still rejects with a
+    // kind-flavored 400 (unverified against a live non-solo type — see
+    // plans/types-write.md), rewrap it naming the boundary rather than
+    // surfacing the generic "request was rejected" text.
+    if (err instanceof AxiError && err.code === "VALIDATION_ERROR" && /\bsolo\b|\bkind\b/i.test(err.message)) {
+      throw new AxiError(
+        `Calendly rejected the update — only solo event types can be updated via the API (${err.message})`,
+        "VALIDATION_ERROR",
+        ["Group/collective/round-robin event types are read-only via the Calendly API"],
+      );
+    }
+    throw err;
+  }
+}
+
+// ── types availability (read + --rules write path) ─────────────────
 
 async function typesAvailability(parsed: Parsed, creds: Credentials): Promise<string> {
   const typeArg = requirePositional(
@@ -275,12 +513,26 @@ async function typesAvailability(parsed: Parsed, creds: Credentials): Promise<st
     "calendly-axi types availability <type> [--rules <json|@file>]",
   );
 
-  if (str(parsed, "--rules") !== undefined) {
-    return notImplemented("types availability --rules", "types-write");
-  }
+  // Network-free: malformed --rules JSON fails before any request.
+  const rulesRaw = str(parsed, "--rules");
+  const rules = rulesRaw !== undefined ? readJsonFlag(rulesRaw, "--rules") : undefined;
 
   const self = await resolveSelf(creds);
   const { uuid, uri } = await resolveEventTypeIdentifier(typeArg, { user: self.user_uri });
+
+  if (rules !== undefined) {
+    // `PATCH /event_type_availability_schedules` — response shape is
+    // untested against a live account (plans/types-write.md Risks); render
+    // whatever comes back rather than projecting a guessed schema onto it.
+    const res = await calendlyRequest<Record<string, unknown>>("event_type_availability_schedules", {
+      method: "PATCH",
+      credentials: creds,
+      query: { event_type: uri },
+      body: { availability_rule: rules },
+    });
+    const schedules = res.collection ?? res.resource ?? res;
+    return renderObject({ status: "updated", event_type: uuid, schedules });
+  }
 
   // `event_type_availability_schedules`' exact shape beyond "rules +
   // timezone" is untested against a live account (plans/types-read.md
