@@ -41,6 +41,7 @@ export const COMMAND_GROUPS: CommandGroup[] = [
           "calendly-axi events",
           "calendly-axi events view <uuid>",
           "calendly-axi events invitees <uuid>",
+          'calendly-axi events invitees <uuid> --email "ada@example.com"',
           'calendly-axi events cancel <uuid> --reason "scheduling conflict"',
           "calendly-axi events no-show <invitee-uuid>",
         ],
@@ -70,6 +71,10 @@ export const COMMAND_GROUPS: CommandGroup[] = [
       {
         usage: "busy [--from --to | --until <dur>] [--user <who>]",
         summary: "Show busy intervals for the next 7 days (calendly events + connected-calendar blocks)",
+        flags: [
+          "--from/--to/--until  time window (default: next 7 days; hard cap 7 days — over-cap fails fast)",
+          "--user <who>         scope to another user instead of self",
+        ],
         examples: ["calendly-axi busy", "calendly-axi busy --until 3d"],
       },
     ],

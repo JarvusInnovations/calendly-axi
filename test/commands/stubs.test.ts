@@ -66,19 +66,14 @@ describe("command stubs: NOT_IMPLEMENTED naming the owning plan", () => {
     }
   });
 
-  it("events reads name events-read; cancel/no-show name events-write", () => {
-    for (const sub of ["list", "view", "invitees"]) {
-      const err = catchErr(() => eventsCommand(sub === "list" ? [] : [sub, "x"]));
-      expect(err.suggestions.join(" ")).toContain("events-read");
-    }
+  it("events cancel/no-show name events-write (list/view/invitees are implemented — see events.test.ts)", async () => {
     for (const sub of ["cancel", "no-show"]) {
-      const err = catchErr(() => eventsCommand([sub, "x"]));
+      // eventsCommand is async (real reads land before these stubs in the
+      // switch), so the NOT_IMPLEMENTED rejection surfaces as a rejected
+      // promise rather than a synchronous throw.
+      const err = await eventsCommand([sub, "x"]).catch((e) => e as { suggestions: string[] });
       expect(err.suggestions.join(" ")).toContain("events-write");
     }
-  });
-
-  it("busy names events-read", () => {
-    expect(catchErr(() => busyCommand([])).suggestions.join(" ")).toContain("events-read");
   });
 
   it("link names events-write", () => {

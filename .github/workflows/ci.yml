@@ -41,7 +41,10 @@ jobs:
       # so it stays green through failures in exactly the code that matters.
       # Running a real command with no credentials exercises dispatch, flag
       # parsing, and the error-formatting path, and must produce a structured
-      # error rather than a crash or a raw stack trace.
+      # error rather than a crash or a raw stack trace. `events` now has a
+      # real implementation (events-read), so the credential check itself —
+      # not a NOT_IMPLEMENTED stub — is what fires here; TOKEN_INVALID is
+      # what every credentialed command produces uniformly once implemented.
       run: |
         node dist/bin/calendly-axi.js --version
         node dist/bin/calendly-axi.js --help > /dev/null
@@ -56,8 +59,8 @@ jobs:
           echo "::error::expected exit 1 without credentials, got $code"
           exit 1
         fi
-        if ! echo "$out" | grep -q 'code: NOT_IMPLEMENTED'; then
-          echo "::error::expected a structured NOT_IMPLEMENTED error"
+        if ! echo "$out" | grep -q 'code: TOKEN_INVALID'; then
+          echo "::error::expected a structured TOKEN_INVALID error"
           exit 1
         fi
 
