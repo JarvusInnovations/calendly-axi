@@ -13,7 +13,8 @@ export type ResourceKind =
   | "invitees"
   | "webhook_subscriptions"
   | "scheduling_links"
-  | "no_shows";
+  | "no_shows"
+  | "groups";
 
 const BASE_URL = "https://api.calendly.com";
 
@@ -64,7 +65,7 @@ export interface ResolvedIdentifier {
 export function resolveIdentifier(
   kind: ResourceKind,
   value: string,
-  label = kind,
+  label: string = kind,
 ): ResolvedIdentifier {
   if (isUri(value)) {
     const actualKind = kindFromUri(value);

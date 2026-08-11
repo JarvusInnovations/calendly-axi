@@ -115,8 +115,11 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * email is looked up via `organization_memberships` scoped to the caller's
  * own organization, per scoping.md; zero or multiple hits behave like name
  * resolution elsewhere in the tool — `NOT_FOUND` with candidates listed.
+ * Exported so commands that resolve `--user` outside `resolveScope`'s
+ * self-widening shape (e.g. `webhooks`'s three-way `--scope`) can reuse the
+ * same email/UUID/URI resolution instead of duplicating it.
  */
-async function resolveUserFlag(value: string, self: ProfileCache, credentials: Credentials): Promise<string> {
+export async function resolveUserFlag(value: string, self: ProfileCache, credentials: Credentials): Promise<string> {
   if (!EMAIL_RE.test(value)) {
     return resolveIdentifier("users", value).uri;
   }
