@@ -462,13 +462,34 @@ describe("events no-show", () => {
     expect(out).toContain("already marked as no-show (no-op)");
   });
 
-  it("rejects a bare invitee uuid with a targeted VALIDATION_ERROR", async () => {
+  it("rejects a bare invitee uuid without --event, naming the --event fix, zero API calls", async () => {
     seedCache();
     const spy = vi.spyOn(globalThis, "fetch");
     const err = await eventsCommand(["no-show", "INV1"]).catch((e) => e as { code: string; suggestions: string[] });
     expect(err.code).toBe("VALIDATION_ERROR");
-    expect(err.suggestions.join(" ")).toContain("events invitees <event> --email");
+    expect(err.suggestions.join(" ")).toContain("--event <event-uuid>");
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("accepts a bare invitee uuid with --event, constructing the nested URI", async () => {
+    seedCache();
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse({ resource: {} }, 201));
+    const out = await eventsCommand(["no-show", "INV1", "--event", "EVT1"]);
+    const [, init] = spy.mock.calls[0]!;
+    expect(JSON.parse(String((init as RequestInit).body)).invitee).toBe(
+      "https://api.calendly.com/scheduled_events/EVT1/invitees/INV1",
+    );
+    expect(out).toContain("no-show marked");
+  });
+
+  it("accepts --event as a full event URI for a bare invitee uuid", async () => {
+    seedCache();
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse({ resource: {} }, 201));
+    await eventsCommand(["no-show", "INV1", "--event", "https://api.calendly.com/scheduled_events/EVT1"]);
+    const [, init] = spy.mock.calls[0]!;
+    expect(JSON.parse(String((init as RequestInit).body)).invitee).toBe(
+      "https://api.calendly.com/scheduled_events/EVT1/invitees/INV1",
+    );
   });
 
   it("--undo fetches the invitee via the URI's embedded event uuid and deletes via no_show.uri", async () => {

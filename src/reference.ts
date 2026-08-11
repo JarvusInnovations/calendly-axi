@@ -37,7 +37,8 @@ export const COMMAND_GROUPS: CommandGroup[] = [
           "--reason <text>               cancellation reason (cancel)",
           "no reschedule endpoint — cancel and rebook with `book` or `link`; invitees hold their own reschedule_url (cancel)",
           "--undo                        clear a no-show mark (no-show)",
-          "no-show's <invitee> must be the full invitee URI (see `events invitees <event>`) — a bare uuid is rejected",
+          "--event <event>               event context for a bare invitee uuid (no-show)",
+          "no-show's <invitee> is the full invitee URI, or a bare invitee uuid plus --event <event>",
         ],
         examples: [
           "calendly-axi events",
@@ -45,8 +46,8 @@ export const COMMAND_GROUPS: CommandGroup[] = [
           "calendly-axi events invitees <uuid>",
           'calendly-axi events invitees <uuid> --email "ada@example.com"',
           'calendly-axi events cancel <uuid> --reason "scheduling conflict"',
-          "calendly-axi events no-show https://api.calendly.com/scheduled_events/<euuid>/invitees/<iuuid>",
-          "calendly-axi events no-show https://api.calendly.com/scheduled_events/<euuid>/invitees/<iuuid> --undo",
+          "calendly-axi events no-show <invitee-uuid> --event <event-uuid>",
+          "calendly-axi events no-show <invitee-uuid> --event <event-uuid> --undo",
         ],
       },
       {

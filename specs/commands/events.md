@@ -21,7 +21,7 @@ Scheduled-event reads and fallout management. API contract: [api/scheduled-event
 
 - Drains the cursor. Default schema: `invitees[N]{uuid,name,email,status,no_show}` (`no_show`: yes/no).
 - Q&A answers appear in the single-invitee detail path: `events invitees <event> --email <e>` with exactly one match renders full detail including `questions_and_answers`, `cancel_url`, `reschedule_url`, reschedule chain.
-- Suggestions: `events no-show <invitee-uri>`, `events cancel <event-uuid>`.
+- Suggestions: `events no-show <invitee-uuid> --event <event-uuid>`, `events cancel <event-uuid>`.
 
 ## events cancel
 
@@ -33,10 +33,10 @@ Scheduled-event reads and fallout management. API contract: [api/scheduled-event
 
 ## events no-show
 
-`calendly-axi events no-show <invitee> [--undo]`
+`calendly-axi events no-show <invitee> [--event <event>] [--undo]`
 
-- `<invitee>` accepts the invitee's **full URI** only (`https://api.calendly.com/scheduled_events/<event-uuid>/invitees/<invitee-uuid>`), printed by `events invitees <event>` (list rows' `uuid` column plus the `--email` detail view's `uri` field). Calendly nests every invitee URI under its event and exposes no flat `GET /invitees/{uuid}`, so a bare invitee UUID has no event context to resolve against — it fails fast with `VALIDATION_ERROR` pointing at `events invitees <event>`.
-- Marks the invitee as a no-show; `--undo` parses the event + invitee uuids out of the URI, fetches the invitee record, and deletes via its `no_show.uri`.
+- `<invitee>` accepts the invitee's **full URI** (`https://api.calendly.com/scheduled_events/<event-uuid>/invitees/<invitee-uuid>`, from the `--email` detail view), or a **bare invitee UUID paired with `--event <event>`** (both visible after `events invitees <event>`) — the tool constructs the nested URI itself, per [never make the agent build a URI](../principles.md#accept-any-identifier-form-never-make-the-agent-build-a-uri). Calendly nests every invitee under its event and exposes no flat `GET /invitees/{uuid}`, so a bare UUID **without** `--event` has no context to resolve against — it fails fast with `VALIDATION_ERROR` naming the `--event` fix.
+- Marks the invitee as a no-show; `--undo` fetches the invitee record via its event and deletes via its `no_show.uri`.
 - Already in the desired state → no-op, exit 0.
 
 ## Principles

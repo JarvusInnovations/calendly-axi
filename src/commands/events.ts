@@ -237,9 +237,6 @@ async function eventsInvitees(parsed: Parsed) {
     });
     return joinBlocks(
       renderObject(detail),
-      // `no-show` needs the full invitee URI (Calendly nests it under its
-      // event — no flat `GET /invitees/{uuid}` exists to resolve a bare
-      // uuid against), so the suggestion carries `inv.uri`, not `inviteeUuid`.
       renderHelp([`calendly-axi events no-show ${inv.uri}`, `calendly-axi events cancel ${eventUuid}`]),
     );
   }
@@ -261,11 +258,8 @@ async function eventsInvitees(parsed: Parsed) {
     name: "invitees",
     items: result.items,
     schema,
-    // The list rows carry only the bare uuid — `no-show` needs the invitee's
-    // full URI (see the comment on the detail-view suggestion above), so we
-    // point at the single-invitee detail path that has it rather than
-    // fabricating an unusable `<invitee-uuid>` placeholder.
     suggestions: [
+      `calendly-axi events no-show <invitee-uuid> --event ${eventUuid}`,
       `calendly-axi events invitees ${eventUuid} --email <invitee-email>`,
       `calendly-axi events cancel ${eventUuid}`,
     ],
@@ -343,27 +337,40 @@ interface InviteeRef {
 }
 
 /**
- * `events no-show` only accepts the invitee's full URI, never a bare UUID —
- * see `specs/commands/events.md#events-no-show`. Calendly nests every
- * invitee URI under its event (`.../scheduled_events/{event}/invitees/
- * {invitee}`) and exposes no flat `GET /invitees/{uuid}`, so a bare UUID
- * has no event context to resolve against for either the mark or the
- * `--undo` path — building a synthetic flat URI would just produce a
- * confusing API-side error instead of a clear client-side one. This is a
- * deliberate, documented deviation from the tool's usual
- * "UUID/URI/name, resolved internally" identifier rule (`principles.md`),
- * driven by the resource shape rather than by preference.
+ * Calendly nests every invitee URI under its event (`.../scheduled_events/
+ * {event}/invitees/{invitee}`) and exposes no flat `GET /invitees/{uuid}`,
+ * so a bare invitee UUID alone has no event context to resolve against for
+ * either the mark or the `--undo` path. Per `principles.md` the agent must
+ * never be made to build a URI itself, so `events no-show` accepts either
+ * form the agent already holds after `events invitees <event>`: the full
+ * invitee URI, or a bare invitee UUID paired with `--event <event>` (the
+ * nested URI is constructed here) — see
+ * `specs/commands/events.md#events-no-show`.
  */
-function parseInviteeUri(value: string): InviteeRef {
+function resolveInviteeRef(value: string, eventFlag: string | undefined): InviteeRef {
   const match = INVITEE_URI_RE.exec(value.trim());
-  if (!match) {
-    throw new AxiError(`"${value}" is not a full invitee URI`, "VALIDATION_ERROR", [
-      "events no-show needs the invitee's full URI — Calendly nests it under its event, so a bare UUID has no event context to resolve",
-      "Run `calendly-axi events invitees <event> --email <invitee-email>` to get it (the `uri` field)",
+  if (match) {
+    const [, eventUuid, inviteeUuid] = match;
+    return { eventUuid: eventUuid!, inviteeUuid: inviteeUuid!, uri: value.trim() };
+  }
+  if (value.includes("/")) {
+    throw new AxiError(`"${value}" is not an invitee URI or UUID`, "VALIDATION_ERROR", [
+      "Pass the invitee's full URI, or its bare UUID plus --event <event>",
+      "Run `calendly-axi events invitees <event>` to list invitee UUIDs",
     ]);
   }
-  const [, eventUuid, inviteeUuid] = match;
-  return { eventUuid: eventUuid!, inviteeUuid: inviteeUuid!, uri: value };
+  if (!eventFlag) {
+    throw new AxiError("a bare invitee UUID needs its event for context — pass --event <event>", "VALIDATION_ERROR", [
+      "Calendly nests invitees under their event, so the UUID alone can't be resolved",
+      `Run \`calendly-axi events no-show ${value} --event <event-uuid>\` (event uuid from \`calendly-axi events\`)`,
+    ]);
+  }
+  const eventUuid = resolveIdentifier("scheduled_events", eventFlag, "event").uuid;
+  return {
+    eventUuid,
+    inviteeUuid: value,
+    uri: `https://api.calendly.com/scheduled_events/${eventUuid}/invitees/${value}`,
+  };
 }
 
 async function noShowMark(ref: InviteeRef, creds: Credentials): Promise<string> {
@@ -417,9 +424,9 @@ async function eventsNoShow(parsed: Parsed): Promise<string> {
     parsed,
     0,
     "invitee",
-    "calendly-axi events no-show <invitee-uri> [--undo]",
+    "calendly-axi events no-show <invitee-uri | invitee-uuid --event <event>> [--undo]",
   );
-  const ref = parseInviteeUri(inviteeArg);
+  const ref = resolveInviteeRef(inviteeArg, str(parsed, "--event"));
 
   return bool(parsed, "--undo") ? noShowUndo(ref, creds) : noShowMark(ref, creds);
 }
