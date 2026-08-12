@@ -25,7 +25,7 @@ Key fields: `uri`, `name`, `email`, `status` (`active` \| `canceled`), `timezone
 
 | Op | Endpoint | Notes |
 | ---- | ---------- | ------- |
-| Mark | `POST /invitee_no_shows` | body: `invitee` (invitee URI). Marking an already-marked invitee errors — treated as a no-op by the client |
+| Mark | `POST /invitee_no_shows` | body: `invitee` (invitee URI). Marking an already-marked invitee errors — treated as a no-op by the client. **Only allowed once the event has started** — earlier attempts get 400 `base: Event is not started yet` (confirmed live), which the client surfaces as-is: it's a genuine can't-do, not a no-op |
 | Get | `GET /invitee_no_shows/{uuid}` | |
 | Unmark | `DELETE /invitee_no_shows/{uuid}` | The no-show UUID comes from the invitee record's `no_show.uri` — the client resolves it; the agent only ever names the invitee |
 

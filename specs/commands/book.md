@@ -9,7 +9,7 @@ Direct booking via the Scheduling API. Contract: [api/booking](../api/booking.md
 - `--type`, `--at`, `--name`, `--email` are all required — there is no default or inferred invitee, ever. Missing flags → `VALIDATION_ERROR` listing exactly what's missing, exit 2, no API call.
 - `--at` must be an exact ISO instant per [time windows](../behaviors/time-windows.md); the value should come from `types slots`.
 - `--answer` repeats, keyed by the event type's custom-question `position`. Client-side pre-validation: fetch the type's `custom_questions`; a missing **required** answer or an out-of-range position fails before the API call, listing the questions `{position, name, required}`.
-- `--location` takes a kind object (JSON) when the event type offers a choice; omitted otherwise.
+- `--location` takes a kind object (JSON) when the event type offers a choice. The API demands an explicit location choice even when the type has exactly one option (confirmed live: omitting it → 400 `invalid location choice`), so when the type has **exactly one location of a conferencing kind** (e.g. `google_conference`) and no `--location` was passed, the tool defaults `location` to that kind — the only choice the invitee could have made. Kinds needing invitee input (`ask_invitee`, `outbound_call`) or venue text are never defaulted; those still require explicit `--location`.
 - `--timezone` defaults to the profile-cache timezone.
 
 ## Output

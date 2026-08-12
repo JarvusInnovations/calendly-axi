@@ -25,6 +25,34 @@ interface CustomQuestion {
 interface EventTypeDetail {
   name: string;
   custom_questions?: CustomQuestion[];
+  locations?: Array<{ kind: string }> | null;
+}
+
+/**
+ * Location kinds where `{ kind }` alone is a complete booking choice — no
+ * invitee input, no venue text. When an event type has exactly one location
+ * and it's one of these, the choice is forced and we make it for the agent
+ * (the API demands an explicit choice even for a single option — confirmed
+ * live via 400 "invalid location choice"; specs/commands/book.md).
+ */
+const AUTO_DEFAULT_LOCATION_KINDS = new Set([
+  "google_conference",
+  "zoom",
+  "zoom_conference",
+  "gotomeeting",
+  "gotomeeting_conference",
+  "webex",
+  "webex_conference",
+  "microsoft_teams_conference",
+]);
+
+function defaultLocation(detail: EventTypeDetail): Record<string, unknown> | undefined {
+  const locations = detail.locations ?? [];
+  const only = locations.length === 1 ? locations[0] : undefined;
+  if (only && AUTO_DEFAULT_LOCATION_KINDS.has(only.kind)) {
+    return { kind: only.kind };
+  }
+  return undefined;
 }
 
 interface InviteeResource {
@@ -101,7 +129,7 @@ function questionCandidates(questions: CustomQuestion[]): string[] {
 function validateAnswers(
   answers: AnswerFlag[],
   questions: CustomQuestion[],
-): Array<{ position: number; answer: string }> {
+): Array<{ question: string; position: number; answer: string }> {
   const byPosition = new Map(questions.map((q) => [q.position, q] as const));
 
   const outOfRange = answers.filter((a) => !byPosition.has(a.position));
@@ -125,7 +153,14 @@ function validateAnswers(
     );
   }
 
-  return answers.map((a) => ({ position: a.position, answer: a.text }));
+  // The API requires the question TEXT in each item — `{position, answer}`
+  // alone is rejected with "questions_and_answers[0].question: is missing"
+  // (confirmed live; specs/api/booking.md).
+  return answers.map((a) => ({
+    question: byPosition.get(a.position)!.name,
+    position: a.position,
+    answer: a.text,
+  }));
 }
 
 // ── --location / --guests parsing ───────────────────────────────────
@@ -274,7 +309,7 @@ export async function bookCommand(args: string[]): Promise<string> {
   const questions = detail.resource.custom_questions ?? [];
   const answers = validateAnswers(parseAnswerFlags(multiStr(parsed, "--answer")), questions);
 
-  const location = parseLocation(str(parsed, "--location"));
+  const location = parseLocation(str(parsed, "--location")) ?? defaultLocation(detail.resource);
   const guests = parseGuests(str(parsed, "--guests"));
 
   const body: Record<string, unknown> = {

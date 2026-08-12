@@ -7,7 +7,7 @@ The two ways calendly-axi gets a meeting onto a calendar: booking it directly (`
 `POST /invitees`
 
 - Body, required: `event_type` (URI), `start_time` (UTC ISO-8601 — must be a currently-available slot), `invitee` (`{ name, email, timezone? }`).
-- Body, optional: `location` (kind-specific object, needed when the event type offers multiple location options), `questions_and_answers[]` (`{ position, answer }` mapped to the event type's `custom_questions` by position; required questions must be answered), `event_guests[]` (emails), `tracking` (UTM fields).
+- Body, optional: `location` (kind-specific object, needed when the event type offers multiple location options), `questions_and_answers[]` — each item requires the **question text itself** alongside the answer: `{ question, answer, position }` (confirmed live: omitting `question` is rejected with `questions_and_answers[0].question: is missing`); items map to the event type's `custom_questions` by position and required questions must be answered. `event_guests[]` (emails), `tracking` (UTM fields).
 - Response: the created invitee resource (`uri`, `event` URI, `cancel_url`, `reschedule_url`, ...). Booking triggers the event type's normal confirmations, notifications, and workflows.
 
 **Gates & limits:**

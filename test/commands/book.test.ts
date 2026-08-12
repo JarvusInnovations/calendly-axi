@@ -142,6 +142,32 @@ describe("book: happy path", () => {
     expect(out).toContain("events cancel E1");
   });
 
+  it("auto-defaults location when the type has exactly one conference-kind option", async () => {
+    const typeWithConference = {
+      resource: { ...TYPE_DETAIL.resource, locations: [{ kind: "google_conference" }] },
+    };
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse(typeWithConference))
+      .mockResolvedValueOnce(jsonResponse(INVITEE_RESOURCE));
+    await bookCommand(REQUIRED_ARGS);
+    const body = JSON.parse(String((spy.mock.calls[1]![1] as RequestInit).body));
+    expect(body.location).toEqual({ kind: "google_conference" });
+  });
+
+  it("never auto-defaults an invitee-input location kind", async () => {
+    const typeWithAskInvitee = {
+      resource: { ...TYPE_DETAIL.resource, locations: [{ kind: "ask_invitee" }] },
+    };
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse(typeWithAskInvitee))
+      .mockResolvedValueOnce(jsonResponse(INVITEE_RESOURCE));
+    await bookCommand(REQUIRED_ARGS);
+    const body = JSON.parse(String((spy.mock.calls[1]![1] as RequestInit).body));
+    expect(body.location).toBeUndefined();
+  });
+
   it("--timezone overrides the profile default", async () => {
     const spy = vi
       .spyOn(globalThis, "fetch")
@@ -236,9 +262,11 @@ describe("book: custom-question pre-validation", () => {
 
     const [, postInit] = spy.mock.calls[1]!;
     const body = JSON.parse(String((postInit as RequestInit).body));
+    // Each item carries the question TEXT — the API rejects {position,answer}
+    // alone (confirmed live; specs/api/booking.md).
     expect(body.questions_and_answers).toEqual([
-      { position: 0, answer: "Acme Inc" },
-      { position: 1, answer: "Referral" },
+      { question: "Company", position: 0, answer: "Acme Inc" },
+      { question: "Referral source", position: 1, answer: "Referral" },
     ]);
   });
 });
