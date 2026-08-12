@@ -1,6 +1,6 @@
 import { AxiError } from "axi-sdk-js";
 import { calendlyRequest, requireCredentials, type QueryValue } from "../calendly/client.js";
-import { resolveIdentifier, uuidFromUri } from "../calendly/ids.js";
+import { resolveEventTypeIdentifier, resolveIdentifier, uuidFromUri } from "../calendly/ids.js";
 import { moreAvailableHint, paginate, paginationSummary } from "../calendly/paginate.js";
 import { resolveScope, resolveSelf, withOrgRoleHint } from "../calendly/scope.js";
 import type { Credentials, ProfileCache } from "../config.js";
@@ -22,6 +22,8 @@ export async function eventsCommand(args: string[]) {
       return eventsView(parsed);
     case "invitees":
       return eventsInvitees(parsed);
+    case "answers":
+      return eventsAnswers(parsed);
     case "cancel":
       return eventsCancel(parsed);
     case "no-show":
@@ -198,6 +200,29 @@ async function eventsView(parsed: Parsed) {
 
 // ── events invitees ──────────────────────────────────────────────────
 
+/**
+ * Shape the invitee `tracking` UTM block for the single-invitee detail view
+ * — `null` (or any-field-null) when the invitee didn't come through a
+ * UTM-tagged scheduling link, per `specs/api/scheduled-events.md`. Returned
+ * `undefined` (dropped by `compact`) when every field is null, so the block
+ * only appears when it closes an actual attribution loop — see
+ * `specs/commands/events.md#events-invitees`.
+ */
+function trackingBlock(tracking: unknown): Record<string, unknown> | undefined {
+  if (!tracking || typeof tracking !== "object") return undefined;
+  const t = tracking as Record<string, unknown>;
+  const fields = {
+    utm_campaign: t.utm_campaign ?? null,
+    utm_source: t.utm_source ?? null,
+    utm_medium: t.utm_medium ?? null,
+    utm_content: t.utm_content ?? null,
+    utm_term: t.utm_term ?? null,
+    salesforce_uuid: t.salesforce_uuid ?? null,
+  };
+  const anyNonNull = Object.values(fields).some((v) => v !== null);
+  return anyNonNull ? fields : undefined;
+}
+
 async function eventsInvitees(parsed: Parsed) {
   const creds = requireCredentials();
 
@@ -237,6 +262,7 @@ async function eventsInvitees(parsed: Parsed) {
       rescheduled: inv.rescheduled,
       old_invitee: inv.old_invitee,
       new_invitee: inv.new_invitee,
+      tracking: trackingBlock(inv.tracking),
     });
     return joinBlocks(
       renderObject(detail),
@@ -267,6 +293,159 @@ async function eventsInvitees(parsed: Parsed) {
       `calendly-axi events cancel ${eventUuid}`,
     ],
     emptyMessage: `0 invitees found for event ${eventUuid}${filterNote ? ` (${filterNote})` : ""}`,
+  });
+}
+
+// ── events answers ───────────────────────────────────────────────────
+
+type AnswersStatus = "active" | "canceled" | "all";
+
+function parseAnswersStatus(parsed: Parsed): AnswersStatus {
+  const raw = str(parsed, "--status", "active");
+  if (raw !== "active" && raw !== "canceled" && raw !== "all") {
+    throw new AxiError(`invalid --status "${raw}"`, "VALIDATION_ERROR", [
+      "Use --status active, --status canceled, or --status all",
+    ]);
+  }
+  return raw;
+}
+
+interface AnswerRow {
+  start: string;
+  startIso: string;
+  email: unknown;
+  question?: unknown;
+  answer?: unknown;
+  utm_source?: unknown;
+  utm_medium?: unknown;
+  utm_campaign?: unknown;
+}
+
+/**
+ * The attribution/aggregation view: what did everyone who booked `<type>`
+ * answer, over a window. The events API has no event-type filter (see
+ * `specs/api/scheduled-events.md`), so this drains `scheduled_events` for
+ * the resolved scope + window and filters client-side on `event_type`, then
+ * drains each matching event's invitees — see
+ * `specs/commands/events.md#events-answers`.
+ */
+async function eventsAnswers(parsed: Parsed): Promise<string> {
+  const creds = requireCredentials();
+  const self = await resolveSelf(creds);
+
+  const typeArg = str(parsed, "--type");
+  if (!typeArg) {
+    throw new AxiError("--type is required", "VALIDATION_ERROR", [
+      "Run `calendly-axi events answers --type <event-type> [--window <name> | --since <dur> | --from --to] [--org] [--utm]`",
+    ]);
+  }
+
+  const orgFlag = bool(parsed, "--org");
+  const utmFlag = bool(parsed, "--utm");
+  const status = parseAnswersStatus(parsed);
+
+  const scope = await resolveScope({ org: orgFlag }, creds, self);
+  const { uuid: typeUuid, uri: typeUri } = await withOrgRoleHint(orgFlag, () =>
+    resolveEventTypeIdentifier(typeArg, { ...scope }),
+  );
+
+  const typeRes = await calendlyRequest<{ resource: { name?: string } }>(`event_types/${typeUuid}`, {
+    credentials: creds,
+  });
+  const typeName = typeRes.resource?.name ?? typeUuid;
+
+  const window = resolveWindow(
+    {
+      from: str(parsed, "--from"),
+      to: str(parsed, "--to"),
+      since: str(parsed, "--since"),
+      until: str(parsed, "--until"),
+      named: str(parsed, "--window"),
+    },
+    { timeZone: self.timezone, default: { since: "30d" } },
+  );
+
+  const eventsQuery: Record<string, QueryValue> = {
+    ...scope,
+    min_start_time: window.from,
+    max_start_time: window.to,
+  };
+  if (status !== "all") eventsQuery.status = status;
+
+  const eventsResult = await withOrgRoleHint(orgFlag, () =>
+    paginate<Record<string, unknown>>("scheduled_events", eventsQuery),
+  );
+  const matchedEvents = eventsResult.items.filter((e) => e.event_type === typeUri);
+
+  const rows: AnswerRow[] = [];
+  let inviteeCount = 0;
+
+  for (const ev of matchedEvents) {
+    const eventUuid = uuidFromUri(String(ev.uri));
+    const start = formatInZone(String(ev.start_time), self.timezone);
+    const inviteesQuery: Record<string, QueryValue> = {};
+    if (status !== "all") inviteesQuery.status = status;
+
+    const inviteesResult = await paginate<Record<string, unknown>>(
+      `scheduled_events/${eventUuid}/invitees`,
+      inviteesQuery,
+    );
+    inviteeCount += inviteesResult.items.length;
+
+    for (const inv of inviteesResult.items) {
+      if (utmFlag) {
+        const tracking = (inv.tracking as Record<string, unknown> | null | undefined) ?? {};
+        rows.push({
+          start,
+          startIso: String(ev.start_time),
+          email: inv.email,
+          utm_source: tracking.utm_source ?? "",
+          utm_medium: tracking.utm_medium ?? "",
+          utm_campaign: tracking.utm_campaign ?? "",
+        });
+        continue;
+      }
+      const qas = (inv.questions_and_answers as Array<Record<string, unknown>> | undefined) ?? [];
+      for (const qa of qas) {
+        rows.push({
+          start,
+          startIso: String(ev.start_time),
+          email: inv.email,
+          question: qa.question,
+          answer: qa.answer,
+        });
+      }
+    }
+  }
+
+  rows.sort((a, b) => new Date(b.startIso).getTime() - new Date(a.startIso).getTime());
+
+  const schema: FieldDef[] = utmFlag
+    ? [
+        { name: "start", extract: (r) => r.start },
+        { name: "email", extract: (r) => r.email },
+        { name: "utm_source", extract: (r) => r.utm_source },
+        { name: "utm_medium", extract: (r) => r.utm_medium },
+        { name: "utm_campaign", extract: (r) => r.utm_campaign },
+      ]
+    : [
+        { name: "start", extract: (r) => r.start },
+        { name: "email", extract: (r) => r.email },
+        { name: "question", extract: (r) => r.question },
+        { name: "answer", extract: (r) => r.answer },
+      ];
+
+  return renderListResponse({
+    header: { type: typeName, window: window.label },
+    summary: { events: matchedEvents.length, invitees: inviteeCount },
+    name: "answers",
+    items: rows as unknown as Array<Record<string, unknown>>,
+    schema,
+    suggestions: [
+      "calendly-axi events invitees <event-uuid> --email <invitee-email>",
+      "Widen with --org, --status canceled|all, or a larger --window/--since",
+    ],
+    emptyMessage: `0 answers for "${typeName}", ${window.label} (events: ${matchedEvents.length}, invitees: ${inviteeCount})`,
   });
 }
 
