@@ -4,8 +4,9 @@ Direct booking via the Scheduling API. Contract: [api/booking](../api/booking.md
 
 ## book
 
-`calendly-axi book --type <event-type> --at <iso-datetime> --name <invitee-name> --email <invitee-email> [--timezone <tz>] [--location <json>] [--answer <position>=<text> ...] [--guests <emails,>]`
+`calendly-axi book --type <event-type> --at <iso-datetime> --name <invitee-name> --email <invitee-email> [--timezone <tz>] [--location <json>] [--answer <position>=<text> ...] [--guests <emails,>] [--org]`
 
+- `--org` widens `--type` **name** resolution organization-wide (ids/URIs are exact and unaffected).
 - `--type`, `--at`, `--name`, `--email` are all required — there is no default or inferred invitee, ever. Missing flags → `VALIDATION_ERROR` listing exactly what's missing, exit 2, no API call.
 - `--at` must be an exact ISO instant per [time windows](../behaviors/time-windows.md); the value should come from `types slots`.
 - `--answer` repeats, keyed by the event type's custom-question `position`. Client-side pre-validation: fetch the type's `custom_questions`; a missing **required** answer or an out-of-range position fails before the API call, listing the questions `{position, name, required}`.
