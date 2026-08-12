@@ -18,7 +18,7 @@ Key resource fields consumed: `uri`, `name`, `active`, `duration`, `duration_opt
 | ---- | ---------- | ------ |
 | Create | `POST /event_types` | required: `owner` (user URI — **may be another org member's** when the caller is an org admin, confirmed live 2026-08-12: the type lands on that member's scheduling page with `admin_managed: false` and full owner edit rights); optional: `duration`, `duration_options`, `color`, `description`, `locations[]`, `locale`, `active`. New types arrive `active: false` regardless of the `active` field observed so far |
 | Update | `PATCH /event_types/{uuid}` | same fields, partial — unspecified fields untouched. Org admins can PATCH other members' types (confirmed live) |
-| Create one-off | `POST /one_off_event_types` | required: `name`, `host` (user URI), `duration`, `date_setting`; optional: `co_hosts[]`, `location`, `timezone` |
+| Create one-off | `POST /one_off_event_types` | required: `name`, `host` (user URI — may be another org member's for admins, confirmed live), `duration`, `date_setting`; optional: `co_hosts[]`, `location`, `timezone`. **One-off (Adhoc) types never appear in `GET /event_types`** — even inactive-inclusive, org-wide (confirmed live 2026-08-12); they are fetchable by id only. They also **cannot be deleted anywhere, including the web UI** (confirmed by hand) — deactivation plus their natural date expiry is the whole lifecycle |
 
 **The silent-ignore quirk** (probed live 2026-08-12): POST and PATCH **silently drop** unrecognized or read-only body fields — `slug` and `custom_questions` both return 200 with nothing changed. No error will ever signal an unsupported write, so the client must never infer writability from a 2xx.
 
