@@ -264,12 +264,25 @@ async function webhooksView(parsed: Parsed): Promise<string> {
   return renderObject({ webhook: webhookDetailFields(res.resource) });
 }
 
+/** Set-equality on event lists — order-insensitive, per specs/api/webhooks.md. */
+function sameEventSet(a: string[], b: unknown): boolean {
+  if (!Array.isArray(b)) return false;
+  const setA = new Set(a);
+  const setB = new Set(b as string[]);
+  if (setA.size !== setB.size) return false;
+  for (const event of setA) {
+    if (!setB.has(event)) return false;
+  }
+  return true;
+}
+
 async function findExistingSubscription(
   scopeParams: WebhookScopeParams,
   url: string,
+  events: string[],
 ): Promise<Record<string, unknown> | undefined> {
   const result = await paginate<Record<string, unknown>>("webhook_subscriptions", scopeQuery(scopeParams));
-  return result.items.find((item) => item.callback_url === url);
+  return result.items.find((item) => item.callback_url === url && sameEventSet(events, item.events));
 }
 
 async function webhooksCreate(parsed: Parsed): Promise<string> {
@@ -325,7 +338,7 @@ async function webhooksCreate(parsed: Parsed): Promise<string> {
     if (err instanceof AxiError && err.code === "CONFLICT") {
       // Duplicate (same url/events/scope) — fetch and report the existing
       // subscription as an already-subscribed no-op, per specs/api/webhooks.md.
-      const existing = await findExistingSubscription(scopeParams, url);
+      const existing = await findExistingSubscription(scopeParams, url, events);
       if (existing) {
         return renderObject({
           status: "already subscribed (no-op)",

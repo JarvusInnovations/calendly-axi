@@ -236,7 +236,10 @@ describe("webhooks create", () => {
 
   it("409 duplicate: fetches and reports the existing subscription as a no-op, exit 0", async () => {
     seedProfile();
-    const existing = webhookResource({ uri: "https://api.calendly.com/webhook_subscriptions/EXISTING" });
+    const existing = webhookResource({
+      uri: "https://api.calendly.com/webhook_subscriptions/EXISTING",
+      events: ["invitee.created"],
+    });
     const spy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ title: "Conflict", message: "already subscribed" }, 409))
@@ -252,6 +255,41 @@ describe("webhooks create", () => {
     expect(out).toContain("EXISTING");
     expect(process.exitCode).toBe(0);
     expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it("409 with matching url but a different events set is not treated as a duplicate — the original CONFLICT surfaces", async () => {
+    seedProfile();
+    const differentEvents = webhookResource({
+      uri: "https://api.calendly.com/webhook_subscriptions/OTHER",
+      events: ["invitee.canceled"],
+    });
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ title: "Conflict", message: "already subscribed" }, 409))
+      .mockResolvedValueOnce(page([differentEvents]));
+    await expect(
+      webhooksCommand(["create", "--url", "https://example.com/hook", "--events", "invitee.created"]),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("409 duplicate match is order-insensitive on the events set", async () => {
+    seedProfile();
+    const existing = webhookResource({
+      uri: "https://api.calendly.com/webhook_subscriptions/EXISTING",
+      // Same set as the create call's --events, reversed order.
+      events: ["invitee.canceled", "invitee.created"],
+    });
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ title: "Conflict", message: "already subscribed" }, 409))
+      .mockResolvedValueOnce(page([existing]));
+    const out = await webhooksCommand([
+      "create",
+      "--url",
+      "https://example.com/hook",
+      "--events",
+      "invitee.created,invitee.canceled",
+    ]);
+    expect(out).toContain("already subscribed (no-op)");
+    expect(out).toContain("EXISTING");
   });
 
   it("--signing-key is passed through to the API but never written to config", async () => {
