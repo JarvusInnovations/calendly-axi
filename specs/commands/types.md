@@ -1,6 +1,6 @@
 # Command: types
 
-Event type management. API contract: [api/event-types](../api/event-types.md). Identifier args accept UUID / URI / name per [identifier resolution](../behaviors/identifier-resolution.md).
+Event type management. API contract: [api/event-types](../api/event-types.md). Identifier args accept UUID / URI / name per [identifier resolution](../behaviors/identifier-resolution.md); on `view`/`update`/`slots`/`availability`, `--org` widens **name** resolution organization-wide (bare ids and URIs are exact and unaffected).
 
 ## types list (default subcommand)
 
@@ -13,11 +13,11 @@ Event type management. API contract: [api/event-types](../api/event-types.md). I
 
 ## types view
 
-`calendly-axi types view <type>` — full detail: uuid, uri, name, active, kind, duration(+options), scheduling_url, color, locations (kind + display), description (truncated at 500 chars with total size + `--full` hint), custom questions `{position,name,type,required}`, owner. Self-contained — no suggestions.
+`calendly-axi types view <type> [--org] [--full]` — full detail: uuid, uri, name, active, kind, duration(+options), scheduling_url, color, locations (kind + display), description (truncated at 500 chars with total size + `--full` hint), custom questions `{position,name,type,required}`, owner. Self-contained — no suggestions.
 
 ## types slots
 
-`calendly-axi types slots <type> [--from --to | --until <dur>]`
+`calendly-axi types slots <type> [--from --to | --until <dur> | --window <name>] [--org]`
 
 - Default window: next 7 days; cap 31 days per [time windows](../behaviors/time-windows.md). The API requires a strictly-future `start_time`, so the default (and any window whose start has already passed but whose end hasn't) is nudged forward to now + 1 minute; an explicit window entirely in the past fails fast naming the future-start requirement.
 - Output: resolved window header, then `slots[N]{start,invitees_remaining}` of available slots (times in profile timezone alongside ISO), `complete: true`.
@@ -30,19 +30,19 @@ Event type management. API contract: [api/event-types](../api/event-types.md). I
 
 - Creates a **solo** type owned by the authenticated user (`owner` from profile cache).
 - `--locations` takes the API's structured JSON (array of kind objects) inline or `@file`; `--help` documents the common kinds with examples. Malformed → the API's 400 details restated per-field.
-- One-off variant: `types create --one-off --name <n> --duration <min> --date <YYYY-MM-DD>[..<YYYY-MM-DD>] [--timezone <tz>] [--co-hosts <ids,>]` → `POST /one_off_event_types`.
+- One-off variant: `types create --one-off --name <n> --duration <min> --date <YYYY-MM-DD>[..<YYYY-MM-DD>] [--timezone <tz>] [--co-hosts <ids,>]` → `POST /one_off_event_types`. `--co-hosts` items accept user UUIDs or URIs, comma-separated.
 - Output: the created type's detail view (uuid, scheduling_url front and center).
 
 ## types update
 
-`calendly-axi types update <type> [--name --duration --description --color --locations --active|--inactive]`
+`calendly-axi types update <type> [--org] [--name --duration --description --color --locations --active|--inactive]`
 
 - Partial update — only supplied flags are sent. Solo types only; attempting a group/collective type surfaces the platform boundary.
 - `--inactive` is the documented stand-in for delete (`--help` says so); `--active` reactivates. Setting the state it already has is a no-op, exit 0.
 
 ## types availability
 
-`calendly-axi types availability <type> [--rules <json|@file>]`
+`calendly-axi types availability <type> [--org] [--rules <json|@file>]`
 
 - Without `--rules`: prints the type's availability schedules (rules + timezone), rendered compactly.
 - With `--rules`: `PATCH /event_type_availability_schedules` with the given `availability_rule` JSON. The nested rules structure is JSON-only by design — no flag sugar; `--help` carries a worked example.

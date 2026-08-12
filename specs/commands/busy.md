@@ -4,7 +4,7 @@ The authenticated user's busy intervals — Calendly events plus connected-calen
 
 ## busy
 
-`calendly-axi busy [--from --to | --until <dur>] [--user <who>]`
+`calendly-axi busy [--from --to | --until <dur> | --window <today|tomorrow|week>] [--user <who>]`
 
 - Default window: next 7 days; hard cap 7 days per [time windows](../behaviors/time-windows.md) (over-cap fails fast naming the cap).
 - Header: resolved window; `complete: true` (endpoint is unpaginated).

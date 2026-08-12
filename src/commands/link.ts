@@ -1,7 +1,7 @@
 import { calendlyRequest, requireCredentials } from "../calendly/client.js";
 import { resolveEventTypeIdentifier } from "../calendly/ids.js";
-import { resolveSelf } from "../calendly/scope.js";
-import { LINK_FLAGS, parseFlags, requirePositional } from "../flags.js";
+import { resolveScope, resolveSelf, withOrgRoleHint } from "../calendly/scope.js";
+import { bool, LINK_FLAGS, parseFlags, requirePositional } from "../flags.js";
 import { compact, joinBlocks, renderHelp, renderObject } from "../output/index.js";
 
 /**
@@ -15,10 +15,10 @@ export async function linkCommand(args: string[]): Promise<string> {
   const creds = requireCredentials();
   const self = await resolveSelf(creds);
 
-  const typeArg = requirePositional(parsed, 0, "event-type", "calendly-axi link <event-type>");
-  // Resolved against self scope by default, per `plans/events-write.md` —
-  // `link` takes no `--org`/`--user` widening (`LINK_FLAGS` is empty).
-  const { uuid, uri } = await resolveEventTypeIdentifier(typeArg, { user: self.user_uri });
+  const typeArg = requirePositional(parsed, 0, "event-type", "calendly-axi link <event-type> [--org]");
+  const org = bool(parsed, "--org");
+  const scope = await resolveScope({ org }, creds, self);
+  const { uuid, uri } = await withOrgRoleHint(org, () => resolveEventTypeIdentifier(typeArg, { ...scope }));
 
   const linkRes = await calendlyRequest<{ resource: { booking_url: string } }>("scheduling_links", {
     method: "POST",

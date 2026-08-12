@@ -4,7 +4,7 @@ Scheduled-event reads and fallout management. API contract: [api/scheduled-event
 
 ## events list (default subcommand)
 
-`calendly-axi events [list] [--status active|canceled] [--email <invitee-email>] [--from --to | --since <dur> | --until <dur>] [--org] [--user <who>] [--limit <n>]`
+`calendly-axi events [list] [--status active|canceled] [--email <invitee-email>] [--from --to | --since <dur> | --until <dur> | --window <today|tomorrow|week>] [--org] [--user <who>] [--limit <n>]`
 
 - Defaults: self-scoped, `status=active`, upcoming (`min_start_time=now`, `sort=start_time:asc`), limit 100. A past-window request (`--since`, or `--to` in the past) flips the default sort to `start_time:desc`.
 - Header: resolved scope + window + status; count per [pagination](../behaviors/pagination-and-limits.md).

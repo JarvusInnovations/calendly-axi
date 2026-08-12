@@ -92,13 +92,15 @@ describe("types list", () => {
     expect(String(url)).not.toContain("active=");
   });
 
-  it("--org scopes to the organization and a role-gate 403 is translated", async () => {
+  it("--org scopes to the organization and a role-gate 403 is translated, appending the drop---org hint", async () => {
     const spy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ title: "Forbidden", message: "requires admin role" }), { status: 403 }),
       );
-    await expect(typesCommand(["list", "--org"])).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const err = await typesCommand(["list", "--org"]).catch((e) => e);
+    expect(err.code).toBe("FORBIDDEN");
+    expect(err.suggestions.join(" ")).toContain("Drop --org to use self scope");
     const [url] = spy.mock.calls[0]!;
     expect(String(url)).toContain("organization=");
     expect(String(url)).not.toContain("user=");
@@ -171,6 +173,38 @@ describe("types view", () => {
     expect(out).toContain("Company");
     expect(out).toContain("owner:");
     expect(out).toContain("https://api.calendly.com/users/ABC123");
+  });
+
+  it("--org widens the name-resolution sweep to organization scope (ids/URIs unaffected)", async () => {
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({
+          collection: [{ uri: "https://api.calendly.com/event_types/T1", name: "Teammate's Type" }],
+          pagination: { count: 1, next_page_token: null },
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(TYPE));
+    await typesCommand(["view", "Teammate's Type", "--org"]);
+    const [sweepUrl] = spy.mock.calls[0]!;
+    const q = new URL(String(sweepUrl)).searchParams;
+    expect(q.get("organization")).toBe("https://api.calendly.com/organizations/ORG789");
+    expect(q.get("user")).toBeNull();
+  });
+
+  it("--org with a bare uuid makes no name-resolution sweep", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse(TYPE));
+    await typesCommand(["view", "T1", "--org"]);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("a role-gate FORBIDDEN from the --org sweep appends the drop---org suggestion", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ title: "Forbidden", message: "requires admin role" }), { status: 403 }),
+    );
+    const err = await typesCommand(["view", "Teammate's Type", "--org"]).catch((e) => e);
+    expect(err.code).toBe("FORBIDDEN");
+    expect(err.suggestions.join(" ")).toContain("Drop --org to use self scope");
   });
 });
 
@@ -253,6 +287,42 @@ describe("types slots", () => {
     });
     expect(spy).not.toHaveBeenCalled();
   });
+
+  it("--window resolves a named window, nudged into the future the same as any other window", async () => {
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse(TYPE))
+      .mockResolvedValueOnce(jsonResponse({ collection: [] }));
+    const out = await typesCommand(["slots", "T1", "--window", "week"]);
+    expect(out).toContain("week");
+    const url = new URL(String(spy.mock.calls[1]![0]));
+    expect(url.searchParams.get("start_time")).toBeTruthy();
+  });
+
+  it("--window combined with --until is a VALIDATION_ERROR naming the conflict, no slots call", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse(TYPE));
+    const err = await typesCommand(["slots", "T1", "--window", "today", "--until", "3d"]).catch((e) => e);
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toContain("--window");
+    expect(err.message).toContain("--until");
+    expect(spy).toHaveBeenCalledTimes(1); // the type-detail fetch happened before window resolution, no slots call
+  });
+
+  it("--org widens the name-resolution sweep to organization scope", async () => {
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({
+          collection: [{ uri: "https://api.calendly.com/event_types/T1", name: "Teammate's Type" }],
+          pagination: { count: 1, next_page_token: null },
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(TYPE))
+      .mockResolvedValueOnce(jsonResponse({ collection: [] }));
+    await typesCommand(["slots", "Teammate's Type", "--org"]);
+    const [sweepUrl] = spy.mock.calls[0]!;
+    expect(String(sweepUrl)).toContain("organization=");
+  });
 });
 
 describe("types availability", () => {
@@ -271,6 +341,21 @@ describe("types availability", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse({ collection: [] }));
     const out = await typesCommand(["availability", "T1"]);
     expect(out).toContain("no availability schedules found for T1");
+  });
+
+  it("--org widens the name-resolution sweep to organization scope", async () => {
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({
+          collection: [{ uri: "https://api.calendly.com/event_types/T1", name: "Teammate's Type" }],
+          pagination: { count: 1, next_page_token: null },
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ collection: [] }));
+    await typesCommand(["availability", "Teammate's Type", "--org"]);
+    const [sweepUrl] = spy.mock.calls[0]!;
+    expect(String(sweepUrl)).toContain("organization=");
   });
 
   it("--rules PATCHes availability_rule and renders the response", async () => {
@@ -596,5 +681,39 @@ describe("types update", () => {
     expect(err.code).toBe("VALIDATION_ERROR");
     expect(err.message.toLowerCase()).toContain("solo");
     expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("--org widens the name-resolution sweep to organization scope; the pre-flight GET and PATCH stay uuid-keyed", async () => {
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({
+          collection: [{ uri: "https://api.calendly.com/event_types/T1", name: "Teammate's Type" }],
+          pagination: { count: 1, next_page_token: null },
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(soloType({ name: "Teammate's Type" })))
+      .mockImplementationOnce(async (_url, init) => {
+        const body = JSON.parse(String((init as RequestInit).body));
+        expect(body).toEqual({ name: "New Name" });
+        return jsonResponse(soloType({ name: "New Name" }));
+      });
+    await typesCommand(["update", "Teammate's Type", "--org", "--name", "New Name"]);
+    const [sweepUrl] = spy.mock.calls[0]!;
+    expect(String(sweepUrl)).toContain("organization=");
+    const [getUrl] = spy.mock.calls[1]!;
+    expect(String(getUrl)).toContain("/event_types/T1");
+    const [patchUrl] = spy.mock.calls[2]!;
+    expect(String(patchUrl)).toContain("/event_types/T1");
+    expect(String(patchUrl)).not.toContain("organization=");
+  });
+
+  it("a role-gate FORBIDDEN from the --org sweep appends the drop---org suggestion", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ title: "Forbidden", message: "requires admin role" }), { status: 403 }),
+    );
+    const err = await typesCommand(["update", "Teammate's Type", "--org", "--name", "New Name"]).catch((e) => e);
+    expect(err.code).toBe("FORBIDDEN");
+    expect(err.suggestions.join(" ")).toContain("Drop --org to use self scope");
   });
 });

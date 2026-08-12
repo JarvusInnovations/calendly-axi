@@ -271,6 +271,56 @@ describe("book: custom-question pre-validation", () => {
   });
 });
 
+describe("book: --org", () => {
+  it("widens --type name resolution to organization scope (ids/URIs unaffected)", async () => {
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({
+          collection: [{ uri: "https://api.calendly.com/event_types/T1", name: "Teammate's Type" }],
+          pagination: { count: 1, next_page_token: null },
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(TYPE_DETAIL))
+      .mockResolvedValueOnce(jsonResponse(INVITEE_RESOURCE));
+
+    await bookCommand([
+      "--type",
+      "Teammate's Type",
+      "--at",
+      "2026-08-18T15:00:00Z",
+      "--name",
+      "Ada Lovelace",
+      "--email",
+      "ada@example.com",
+      "--org",
+    ]);
+
+    const [sweepUrl] = spy.mock.calls[0]!;
+    expect(String(sweepUrl)).toContain("organization=");
+    expect(String(sweepUrl)).not.toContain("user=");
+  });
+
+  it("a role-gate FORBIDDEN from the --org sweep appends the drop---org suggestion", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ title: "Forbidden", message: "requires admin role" }), { status: 403 }),
+    );
+    const err = await bookCommand([
+      "--type",
+      "Teammate's Type",
+      "--at",
+      "2026-08-18T15:00:00Z",
+      "--name",
+      "Ada Lovelace",
+      "--email",
+      "ada@example.com",
+      "--org",
+    ]).catch((e) => e);
+    expect(err.code).toBe("FORBIDDEN");
+    expect(err.suggestions.join(" ")).toContain("Drop --org to use self scope");
+  });
+});
+
 describe("book: failure shapes", () => {
   it("409 on the booking call becomes CONFLICT suggesting `types slots`", async () => {
     vi.spyOn(globalThis, "fetch")

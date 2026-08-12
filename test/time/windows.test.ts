@@ -64,6 +64,29 @@ describe("resolveWindow — named windows", () => {
       expect.objectContaining({ code: "VALIDATION_ERROR" }),
     );
   });
+
+  it("rejects --window combined with --from, naming the conflict", () => {
+    try {
+      resolveWindow({ named: "today", from: "2026-08-11" }, { now: NOW, timeZone: NY });
+      throw new Error("should have thrown");
+    } catch (err) {
+      expect((err as { code: string }).code).toBe("VALIDATION_ERROR");
+      expect((err as { message: string }).message).toContain("--window");
+      expect((err as { message: string }).message).toContain("--from");
+    }
+  });
+
+  it("rejects --window combined with --since and --until together, naming both conflicts", () => {
+    try {
+      resolveWindow({ named: "week", since: "7d", until: "7d" }, { now: NOW, timeZone: NY });
+      throw new Error("should have thrown");
+    } catch (err) {
+      expect((err as { code: string }).code).toBe("VALIDATION_ERROR");
+      const message = (err as { message: string }).message;
+      expect(message).toContain("--since");
+      expect(message).toContain("--until");
+    }
+  });
 });
 
 describe("resolveWindow — explicit --from/--to", () => {

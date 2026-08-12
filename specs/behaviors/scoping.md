@@ -16,7 +16,7 @@ Every command that hits a scope-requiring endpoint resolves its `user`/`organiza
 
 - The profile cache (`config.json → profile_cache`) holds `user_uri`, `user_uuid`, `organization_uri`, `organization_uuid`, `name`, `email`, `scheduling_url`, `timezone`, `cached_at` from `GET /users/me` at setup. `auth whoami --refresh` and re-running `auth setup` refresh it.
 - A command needing scope with no cache (env-token-only usage, e.g. CI) performs the `users/me` bootstrap **once per invocation**, transparently, without writing config.
-- Org-scoped listing needs an org admin/owner role; the role-gate 403 is translated per [conventions](../api/conventions.md) and suggests dropping `--org`.
+- Org-scoped listing needs an org admin/owner role; the role-gate 403 is translated per [conventions](../api/conventions.md), and **the command that passed `--org` appends the "drop `--org`" suggestion itself** — the shared client stays command-agnostic and only names the role requirement, since it cannot know which flag produced the scope.
 - `--org` and `--user` are validated per command against what the endpoint actually supports; combinations the API rejects (e.g. neither param) are prevented client-side.
 
 ## Principles

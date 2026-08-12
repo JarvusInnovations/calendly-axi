@@ -217,8 +217,8 @@ export const HOME_FLAGS: FlagSpec = {};
 
 export const TYPES_FLAGS: Record<string, FlagSpec> = {
   list: { boolean: ["--org", "--all", "--inactive"] },
-  view: { boolean: ["--full"] },
-  slots: { value: ["--from", "--to", "--until"] },
+  view: { boolean: ["--full", "--org"] },
+  slots: { value: ["--from", "--to", "--until", "--window"], boolean: ["--org"] },
   create: {
     value: [
       "--name",
@@ -234,14 +234,14 @@ export const TYPES_FLAGS: Record<string, FlagSpec> = {
   },
   update: {
     value: ["--name", "--duration", "--description", "--color", "--locations"],
-    boolean: ["--active", "--inactive"],
+    boolean: ["--active", "--inactive", "--org"],
   },
-  availability: { value: ["--rules"] },
+  availability: { value: ["--rules"], boolean: ["--org"] },
 };
 
 export const EVENTS_FLAGS: Record<string, FlagSpec> = {
   list: {
-    value: ["--status", "--email", "--from", "--to", "--since", "--until", "--user", "--limit"],
+    value: ["--status", "--email", "--from", "--to", "--since", "--until", "--window", "--user", "--limit"],
     boolean: ["--org"],
   },
   view: {},
@@ -251,10 +251,10 @@ export const EVENTS_FLAGS: Record<string, FlagSpec> = {
 };
 
 export const BUSY_FLAGS: FlagSpec = {
-  value: ["--from", "--to", "--until", "--user"],
+  value: ["--from", "--to", "--until", "--window", "--user"],
 };
 
-export const LINK_FLAGS: FlagSpec = {};
+export const LINK_FLAGS: FlagSpec = { boolean: ["--org"] };
 
 export const BOOK_FLAGS: FlagSpec = {
   value: ["--type", "--at", "--name", "--email", "--timezone", "--location", "--guests"],
@@ -262,6 +262,7 @@ export const BOOK_FLAGS: FlagSpec = {
   // custom questions by position, so a repeated flag must accumulate
   // rather than last-win. See specs/commands/book.md.
   multi: ["--answer"],
+  boolean: ["--org"],
 };
 
 export const WEBHOOKS_FLAGS: Record<string, FlagSpec> = {

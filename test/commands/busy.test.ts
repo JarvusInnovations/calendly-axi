@@ -142,6 +142,29 @@ describe("busy: rows", () => {
   });
 });
 
+describe("busy: --window", () => {
+  it("--window week resolves a calendar-aligned window", async () => {
+    seedCache();
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse({ collection: [] }));
+    const out = await busyCommand(["--window", "week"]);
+    const [url] = spy.mock.calls[0]!;
+    const q = queryOf(url);
+    expect(q.get("start_time")).toBeTruthy();
+    expect(q.get("end_time")).toBeTruthy();
+    expect(out).toContain("week");
+  });
+
+  it("--window combined with --until is a VALIDATION_ERROR naming the conflict, zero API calls", async () => {
+    seedCache();
+    const spy = vi.spyOn(globalThis, "fetch");
+    const err = await busyCommand(["--window", "today", "--until", "3d"]).catch((e) => e);
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toContain("--window");
+    expect(err.message).toContain("--until");
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
 describe("busy: window cap", () => {
   it("--until 10d fails fast naming the 7-day cap, no request made", async () => {
     seedCache();

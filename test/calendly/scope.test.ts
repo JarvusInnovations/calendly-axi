@@ -1,8 +1,9 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { AxiError } from "axi-sdk-js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchProfile, resolveScope, resolveSelf } from "../../src/calendly/scope.js";
+import { fetchProfile, resolveScope, resolveSelf, withOrgRoleHint } from "../../src/calendly/scope.js";
 import { writeConfig, type Credentials } from "../../src/config.js";
 
 const CREDS: Credentials = { token: "tok_abc", source: "config" };
@@ -225,5 +226,37 @@ describe("resolveScope", () => {
     const scope = await resolveScope({}, CREDS, providedSelf);
     expect(scope).toEqual({ user: "https://api.calendly.com/users/PROVIDED" });
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe("withOrgRoleHint", () => {
+  it("appends the drop---org suggestion to a FORBIDDEN error when orgFlag is true", async () => {
+    const err = await withOrgRoleHint(true, async () => {
+      throw new AxiError("Forbidden on GET event_types", "FORBIDDEN", ["An org admin/owner role is required"]);
+    }).catch((e) => e);
+    expect(err.code).toBe("FORBIDDEN");
+    expect(err.suggestions).toEqual([
+      "An org admin/owner role is required",
+      "Drop --org to use self scope",
+    ]);
+  });
+
+  it("leaves a FORBIDDEN error untouched when orgFlag is false", async () => {
+    const err = await withOrgRoleHint(false, async () => {
+      throw new AxiError("Forbidden", "FORBIDDEN", ["some hint"]);
+    }).catch((e) => e);
+    expect(err.suggestions).toEqual(["some hint"]);
+  });
+
+  it("leaves a non-FORBIDDEN error untouched even when orgFlag is true", async () => {
+    const err = await withOrgRoleHint(true, async () => {
+      throw new AxiError("Not found", "NOT_FOUND", ["some hint"]);
+    }).catch((e) => e);
+    expect(err.suggestions).toEqual(["some hint"]);
+  });
+
+  it("passes through the resolved value on success", async () => {
+    const result = await withOrgRoleHint(true, async () => 42);
+    expect(result).toBe(42);
   });
 });

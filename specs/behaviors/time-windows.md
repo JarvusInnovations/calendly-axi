@@ -7,7 +7,9 @@ Commands taking a time window accept human forms and convert to the UTC ISO-8601
 - `--from <date|datetime>` / `--to <date|datetime>` — `YYYY-MM-DD` (interpreted in the cached profile timezone, from start/end of day) or full ISO datetimes.
 - `--since <dur>` — a lookback (`7d`, `24h`, `2w`) ending now.
 - `--until <dur>` — a lookahead (`7d`, `30d`) starting now.
-- Named windows: `today`, `tomorrow`, `week` (current Mon–Sun in profile timezone).
+- `--window <today|tomorrow|week>` — calendar-aligned named windows in the profile timezone (`today`/`tomorrow` = midnight-to-midnight; `week` = current Mon–Sun). Distinct from `--since`/`--until`, which are rolling offsets from now.
+
+`--window` is mutually exclusive with the other window flags — combining them is a `VALIDATION_ERROR` naming the conflict.
 
 The **resolved window is echoed in the output header** as a year-stamped label (`window: 2026-08-11 → 2026-08-18 (America/New_York)`), so a wrong window is visible, not silent.
 

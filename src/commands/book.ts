@@ -1,9 +1,9 @@
 import { AxiError } from "axi-sdk-js";
 import { calendlyRequest, requireCredentials } from "../calendly/client.js";
 import { resolveEventTypeIdentifier, uuidFromUri } from "../calendly/ids.js";
-import { resolveSelf } from "../calendly/scope.js";
+import { resolveScope, resolveSelf, withOrgRoleHint } from "../calendly/scope.js";
 import type { Credentials } from "../config.js";
-import { BOOK_FLAGS, multiStr, parseFlags, str, type Parsed } from "../flags.js";
+import { BOOK_FLAGS, bool, multiStr, parseFlags, str, type Parsed } from "../flags.js";
 import { joinBlocks, renderHelp, renderObject } from "../output/index.js";
 import { parseExactInstant } from "../time/windows.js";
 
@@ -301,7 +301,9 @@ export async function bookCommand(args: string[]): Promise<string> {
   const timeZone = str(parsed, "--timezone", self.timezone);
   const startTime = parseExactInstant(at, timeZone);
 
-  const { uuid, uri } = await resolveEventTypeIdentifier(type, { user: self.user_uri });
+  const org = bool(parsed, "--org");
+  const scope = await resolveScope({ org }, creds, self);
+  const { uuid, uri } = await withOrgRoleHint(org, () => resolveEventTypeIdentifier(type, { ...scope }));
 
   // Pre-flight: fetch the type's custom_questions before the booking call
   // itself, per book.md.

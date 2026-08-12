@@ -1,6 +1,6 @@
 # Command: hook
 
-Session-hook lifecycle management, mirroring harvest-axi's triad. The hook injects the [home view](home.md) at session start for Claude Code, Codex, and OpenCode via `axi-sdk-js`'s `installSessionStartHooks`.
+Session-hook lifecycle management, mirroring harvest-axi's triad. `calendly-axi hook` with no subcommand is `hook status`. The hook injects the [home view](home.md) at session start for Claude Code, Codex, and OpenCode via `axi-sdk-js`'s `installSessionStartHooks`.
 
 ## hook install
 

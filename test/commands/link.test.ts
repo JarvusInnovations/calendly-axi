@@ -96,6 +96,36 @@ describe("link", () => {
     expect(out).toContain("30 Minute Meeting");
   });
 
+  it("--org widens name resolution to organization scope", async () => {
+    seedCache();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({
+          collection: [{ uri: "https://api.calendly.com/event_types/ET1", name: "Teammate's Type" }],
+          pagination: { count: 1, next_page_token: null },
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ resource: { booking_url: "https://calendly.com/d/abc-123/x" } }))
+      .mockResolvedValueOnce(jsonResponse({ resource: { name: "Teammate's Type", duration: 30 } }));
+
+    await linkCommand(["Teammate's Type", "--org"]);
+
+    const [sweepUrl] = spy.mock.calls[0]!;
+    expect(String(sweepUrl)).toContain("organization=");
+    expect(String(sweepUrl)).not.toContain("user=");
+  });
+
+  it("a role-gate FORBIDDEN from the --org sweep appends the drop---org suggestion", async () => {
+    seedCache();
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ title: "Forbidden", message: "requires admin role" }), { status: 403 }),
+    );
+    const err = await linkCommand(["Teammate's Type", "--org"]).catch((e) => e);
+    expect(err.code).toBe("FORBIDDEN");
+    expect(err.suggestions.join(" ")).toContain("Drop --org to use self scope");
+  });
+
   it("requires the event-type argument", async () => {
     seedCache();
     const spy = vi.spyOn(globalThis, "fetch");
