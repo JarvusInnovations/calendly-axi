@@ -37,8 +37,8 @@ The spec deltas in this branch's `docs(specs)` commit across the ten files liste
 
 ## Validation
 
-- [ ] `events --window today`, `busy --window week`, `types slots <t> --window tomorrow` resolve calendar-aligned windows in the profile timezone (unit + live spot-check); combining `--window` with `--since`/`--from` → `VALIDATION_ERROR` naming the conflict.
-- [ ] `link "<teammate-type-name>" --org` resolves a type the caller doesn't own (unit-tested with fixtures; live spot-check if an org-mate type exists).
+- [x] `events --window today`, `busy --window week`, `types slots <t> --window tomorrow` resolve calendar-aligned windows in the profile timezone (unit + live spot-check); combining `--window` with `--since`/`--from` → `VALIDATION_ERROR` naming the conflict. *(Live spot-check 2026-08-12: `today` and Mon–Sun `week` both calendar-aligned in America/New_York; conflict guard fires.)*
+- [x] `link "<teammate-type-name>" --org` resolves a type the caller doesn't own (unit-tested with fixtures; live spot-check if an org-mate type exists). *(Live spot-check 2026-08-12: a teammate-owned type resolved by name and minted a link; a six-way ambiguous org-wide name produced the full `<uuid> (<name>)` candidate list, exit 2.)*
 - [x] All six surfaces reject `--org` no longer as unknown flag; ids/URIs bypass the sweep unchanged.
 - [x] Org-scoped `FORBIDDEN` on `events --org` / `types list --org` output includes the drop-`--org` suggestion (fixture).
 - [x] Duplicate-webhook no-op only matches subscriptions with identical url AND events set (fixture: same url, different events → not treated as duplicate).
