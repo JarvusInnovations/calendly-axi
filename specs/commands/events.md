@@ -20,8 +20,18 @@ Scheduled-event reads and fallout management. API contract: [api/scheduled-event
 `calendly-axi events invitees <event> [--status active|canceled] [--email <e>]`
 
 - Drains the cursor. Default schema: `invitees[N]{uuid,name,email,status,no_show}` (`no_show`: yes/no).
-- Q&A answers appear in the single-invitee detail path: `events invitees <event> --email <e>` with exactly one match renders full detail including `questions_and_answers`, `cancel_url`, `reschedule_url`, reschedule chain.
+- Q&A answers appear in the single-invitee detail path: `events invitees <event> --email <e>` with exactly one match renders full detail including `questions_and_answers`, `cancel_url`, `reschedule_url`, reschedule chain, and — when any field is non-null — the `tracking` UTM block (`utm_campaign/source/medium/content/term`, `salesforce_uuid`), closing the loop for link-attribution workflows.
 - Suggestions: `events no-show <invitee-uuid> --event <event-uuid>`, `events cancel <event-uuid>`.
+
+## events answers
+
+`calendly-axi events answers --type <event-type> [--window <name> | --since <dur> | --from --to] [--org] [--utm]`
+
+- The attribution/aggregation view: what did everyone who booked `<type>` answer, over a window — without walking events one by one.
+- `--type` accepts UUID / URI / name per [identifier resolution](../behaviors/identifier-resolution.md); `--org` widens both name resolution and the event sweep.
+- The events API has **no event-type filter** (see [api/scheduled-events](../api/scheduled-events.md)) — the command drains `scheduled_events` for the resolved scope + window and filters client-side on `event_type`, then drains each matching event's invitees. Default window: `--since 30d`.
+- Output: header (resolved type, window, `events: N, invitees: M`), then one row per question answer — `answers[K]{start,email,question,answer}` sorted by start descending. `--utm` swaps the schema to `{start,email,utm_source,utm_medium,utm_campaign}` (one row per invitee). Empty: definitive.
+- Includes only `active` invitees by default; `--status canceled|all` widens.
 
 ## events cancel
 

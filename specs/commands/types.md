@@ -26,10 +26,11 @@ Event type management. API contract: [api/event-types](../api/event-types.md). I
 
 ## types create
 
-`calendly-axi types create --name <n> --duration <min> [--description <text>] [--color <hex>] [--locations <json|@file>] [--inactive]`
+`calendly-axi types create --name <n> --duration <min> [--owner <who>] [--description <text>] [--color <hex>] [--locations <json|@file>] [--inactive]`
 
-- Creates a **solo** type owned by the authenticated user (`owner` from profile cache).
+- Creates a **solo** type. `--owner <who>` (UUID / URI / email, resolved via [scoping](../behaviors/scoping.md)'s user resolution) sets another org member as the host — the type lands on **their** scheduling page with full owner rights (org-admin only; the server's role-gate 403 is the enforcement). Default owner: the authenticated user (profile cache).
 - `--locations` takes the API's structured JSON (array of kind objects) inline or `@file`; `--help` documents the common kinds with examples. Malformed → the API's 400 details restated per-field.
+- `--location-kind <kind> [--location-text <text>]` is single-location sugar over `--locations` (mutually exclusive with it): maps to `[{ kind, location: <text if given> }]`. Conferencing kinds need no text; `physical`/`custom` take it via `--location-text`.
 - One-off variant: `types create --one-off --name <n> --duration <min> --date <YYYY-MM-DD>[..<YYYY-MM-DD>] [--timezone <tz>] [--co-hosts <ids,>]` → `POST /one_off_event_types`. `--co-hosts` items accept user UUIDs or URIs, comma-separated.
 - Output: the created type's detail view (uuid, scheduling_url front and center).
 
@@ -38,7 +39,9 @@ Event type management. API contract: [api/event-types](../api/event-types.md). I
 `calendly-axi types update <type> [--org] [--name --duration --description --color --locations --active|--inactive]`
 
 - Partial update — only supplied flags are sent. Solo types only; attempting a group/collective type surfaces the platform boundary.
+- **Diff echo:** the output renders each changed field as `old → new` (derived from the pre-flight GET the no-op check already performs and the PATCH response), so batch edits are verifiable without a follow-up `view`.
 - `--inactive` is the documented stand-in for delete (`--help` says so); `--active` reactivates. Setting the state it already has is a no-op, exit 0.
+- **Rename warning:** when `--name` changes, the output carries a plain note that the slug/`scheduling_url` do **not** follow the rename (slugs are UI-only — see [api/event-types](../api/event-types.md)); the old booking URL keeps working and the new name only shows on the page. Without the note, the API's silent-ignore behavior would make this invisible.
 
 ## types availability
 

@@ -6,7 +6,7 @@ Everything under `events` and `busy`. Wrapping, pagination, and errors per [conv
 
 | Op | Endpoint | Notes |
 | ---- | ---------- | ------- |
-| List | `GET /scheduled_events` | q: `user` and/or `organization` (URIs — at least one required), `invitee_email`, `status` (`active` \| `canceled`), `min_start_time`, `max_start_time`, `sort` (`start_time:asc`/`desc`), `count`, `page_token`. Org-wide listing requires an admin/owner role — a role-gate 403 otherwise |
+| List | `GET /scheduled_events` | q: `user` and/or `organization` (URIs — at least one required), `invitee_email`, `status` (`active` \| `canceled`), `min_start_time`, `max_start_time`, `sort` (`start_time:asc`/`desc`), `count`, `page_token`. **No `event_type` filter exists** — per-type views (`events answers`) drain the window and filter client-side. Org-wide listing requires an admin/owner role — a role-gate 403 otherwise |
 | Get | `GET /scheduled_events/{uuid}` | |
 | Cancel | `POST /scheduled_events/{uuid}/cancellation` | body: `reason` (optional). Triggers cancellation notifications to invitees. Cancelling an already-canceled event returns an error — the client detects this case and treats it as a no-op (see [events](../commands/events.md)) |
 
@@ -19,7 +19,7 @@ Key resource fields consumed: `uri`, `name`, `status`, `start_time`, `end_time`,
 | List | `GET /scheduled_events/{uuid}/invitees` | q: `status`, `email`, `sort`, `count`, `page_token` |
 | Get | `GET /scheduled_events/{event_uuid}/invitees/{invitee_uuid}` | |
 
-Key fields: `uri`, `name`, `email`, `status` (`active` \| `canceled`), `timezone`, `questions_and_answers[]` (`{ question, answer, position }`), `tracking`, `no_show` (`{ uri }` or null), `cancel_url`, `reschedule_url`, `rescheduled`, `new_invitee`/`old_invitee` (URIs linking a reschedule chain).
+Key fields: `uri`, `name`, `email`, `status` (`active` \| `canceled`), `timezone`, `questions_and_answers[]` (`{ question, answer, position }`), `tracking` (`{ utm_campaign, utm_source, utm_medium, utm_content, utm_term, salesforce_uuid }` — populated from UTM-tagged scheduling links, all-null otherwise), `no_show` (`{ uri }` or null), `cancel_url`, `reschedule_url`, `rescheduled`, `new_invitee`/`old_invitee` (URIs linking a reschedule chain).
 
 ## Invitee no-shows
 
