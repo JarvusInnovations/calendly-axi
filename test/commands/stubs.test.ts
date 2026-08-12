@@ -8,8 +8,8 @@ import { busyCommand } from "../../src/commands/busy.js";
 import { doctorCommand } from "../../src/commands/doctor.js";
 import { eventsCommand } from "../../src/commands/events.js";
 import { homeCommand } from "../../src/commands/home.js";
-import { hookCommand } from "../../src/commands/hook.js";
 import { linkCommand } from "../../src/commands/link.js";
+import { setupCommand } from "../../src/commands/setup.js";
 import { typesCommand } from "../../src/commands/types.js";
 
 beforeEach(() => {
@@ -28,13 +28,15 @@ afterEach(() => {
  * *flag* validation (as opposed to subcommand resolution) with a bogus flag.
  * `auth` has no default subcommand, so an unknown flag alone resolves as
  * "missing subcommand" rather than "unknown flag" — it needs an explicit
- * subcommand first to reach the same check.
+ * subcommand first to reach the same check. `setup` similarly requires its
+ * mandatory first positional (`hooks`) before a bogus flag reaches
+ * `SETUP_FLAGS` validation.
  */
 const STUB_COMMANDS: Array<{ name: string; fn: (args: string[]) => unknown; args: string[] }> = [
   { name: "home", fn: homeCommand, args: ["--totally-bogus-flag"] },
   { name: "auth", fn: authCommand, args: ["setup", "--totally-bogus-flag"] },
   { name: "doctor", fn: doctorCommand, args: ["--totally-bogus-flag"] },
-  { name: "hook", fn: hookCommand, args: ["--totally-bogus-flag"] },
+  { name: "setup", fn: setupCommand, args: ["hooks", "--totally-bogus-flag"] },
   { name: "types", fn: typesCommand, args: ["--totally-bogus-flag"] },
   { name: "events", fn: eventsCommand, args: ["--totally-bogus-flag"] },
   { name: "busy", fn: busyCommand, args: ["--totally-bogus-flag"] },
