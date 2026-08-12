@@ -223,6 +223,7 @@ export const TYPES_FLAGS: Record<string, FlagSpec> = {
     value: [
       "--name",
       "--duration",
+      "--owner",
       "--description",
       "--color",
       "--locations",
