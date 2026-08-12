@@ -24,7 +24,7 @@ pr: 18
 - [x] Invitee detail shows the UTM block when any tracking field is non-null and omits it when all-null (fixtures).
 - [x] `events answers --type <name>` resolves the type, drains + client-filters events, drains invitees, renders `{start,email,question,answer}` rows descending (multi-page fixtures); `--utm` swaps schema; `--status`/`--org` widen; empty window definitive.
 - [x] Window flags behave per time-windows (default `--since 30d`); `--window`-vs-`--since` conflict fires.
-- [ ] Live spot-check against the account's real bookings (Q&A rows exist from the 2026-08-12 test booking's event type).
+- [x] Live spot-check against the account's real bookings (Q&A rows exist from the 2026-08-12 test booking's event type). *(Verified 2026-08-12: 8 real bookings render with answers in both schemas; the check also exposed that a lookback-capped default window missed the future-starting test booking — fixed spec-first on develop (`fix(events): answers default window keeps the future open`).)*
 
 ## Risks / unknowns
 
