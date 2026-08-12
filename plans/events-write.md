@@ -25,8 +25,8 @@ pr: 10
 
 ## Validation
 
-- [ ] Live round-trip: book a slot (web UI or `book` if landed), `events cancel <e> --reason test` → confirmation naming invitees notified; repeat → `already canceled (no-op)`, exit 0. *(No live credentials on this machine — see Notes; fixture/spy-based coverage in `test/commands/events.test.ts` instead.)*
-- [ ] No-show mark → invitee row shows `no_show: yes`; `--undo` clears it; both repeated → no-ops, exit 0. *(Same live-credentials constraint — see Notes.)*
+- [x] Live round-trip: book a slot (web UI or `book` if landed), `events cancel <e> --reason test` → confirmation naming invitees notified; repeat → `already canceled (no-op)`, exit 0. *(Live-verified 2026-08-12 — the double-cancel is caught by the pre-fetch status check, so the `looksLikeAlready` race heuristic stays fixture-only.)*
+- [ ] No-show mark → invitee row shows `no_show: yes`; `--undo` clears it; both repeated → no-ops, exit 0. *(Live attempt 2026-08-12 discovered an undocumented boundary — the API rejects no-show marks until the event has started (`Event is not started yet`; recorded in `specs/api/scheduled-events.md`). The round-trip therefore needs an elapsed test event; both mark forms (full URI and bare uuid + `--event`) were confirmed to construct identical, accepted request shapes up to that boundary.)*
 - [ ] `link "30 min"` resolves by name, prints booking_url + resolved type identity + single-use note; booking through the URL then reusing it confirms single-use. *(Name resolution + output shape covered by `test/commands/link.test.ts`; the actual single-use enforcement is a live-Calendly-side guarantee, unverifiable without credentials.)*
 - [x] Cancel help text names the no-reschedule boundary and the rebook path — verified via `calendly-axi events --help` against the built bundle: `"no reschedule endpoint — cancel and rebook with \`book\` or \`link\`; invitees hold their own reschedule_url (cancel)"`.
 

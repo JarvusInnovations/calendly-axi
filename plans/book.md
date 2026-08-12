@@ -23,7 +23,7 @@ pr: 8
 
 - [x] Missing any required flag → exit 2 listing exactly the missing ones, zero API calls (asserted via fetch spy).
 - [x] Required custom question unanswered → pre-flight `VALIDATION_ERROR` listing `{position,name,required}`, zero booking calls.
-- [ ] Live (paid account): `types slots` → `book` that slot → confirmation with event uuid + URLs; the meeting appears in `events` and the invitee got the standard email.
+- [x] Live (paid account): `types slots` → `book` that slot → confirmation with event uuid + URLs; the meeting appears in `events` and the invitee got the standard email. *(Live-verified 2026-08-12 against a real slot with a plus-alias invitee; canceled immediately after. Surfaced two API contract corrections — question text required in `questions_and_answers`, explicit location choice required even for a single option — both fixed with specs amended (`fix(book): live-API fixes` on develop).)*
 - [x] Booking the same slot again → `CONFLICT` suggesting `types slots`. (Fixture-verified: a 409 on `POST /invitees` renders `CONFLICT` suggesting `types slots <type>`. Not literally re-booked against a live already-taken slot — that half rides the unchecked live row above.)
 - [x] 429 fixture renders the booking-specific limits (10/min, 50/hr, 100/day), not the general ones; free-token 403 fixture renders `PLAN_REQUIRED` naming Standard.
 - [x] No retry logic exists on this path (code inspection + spy asserting single POST on transient-error fixture).

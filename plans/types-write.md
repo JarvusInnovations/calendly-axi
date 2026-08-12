@@ -21,12 +21,12 @@ pr: 9
 
 ## Validation
 
-- [ ] Live: `types create --name "axi test" --duration 15` → detail with scheduling_url; booking page loads.
+- [x] Live: `types create --name "axi test" --duration 15` → detail with scheduling_url; booking page loads. *(Live-verified 2026-08-12: create, rename, activate, deactivate, and same-state no-op all confirmed. Observed: new solo types arrive `active: false` even without `--inactive` — likely pending availability config; worth probing `active: true` in the create body and adding an `--active` create flag if it works. Booking-page load itself not exercised (type stayed a deactivated throwaway).)*
 - [x] `--locations '@fixture.json'` round-trips a physical + custom kind; malformed JSON and a bad kind each fail with restated per-field details, exit 2/1 as appropriate. — Verified via vitest fetch spies (mocked API), not a live account: see `test/commands/types.test.ts` "--locations @file round-trips a physical + custom kind fixture...", "malformed --locations JSON is a VALIDATION_ERROR before any request", and "a bad --locations kind: the API's 400 with per-field details is restated, exit 2".
 - [x] `types update` changes only supplied fields (verify via view before/after); `--inactive` deactivates; repeating it → no-op exit 0; help text names deactivate-as-delete. — Verified via mocked GET-then-PATCH assertions (no live before/after view was run): "only the supplied fields land in the PATCH body", "--inactive on an active type PATCHes active:false", "--inactive on an already-inactive type is a no-op, GET only". Help text: `src/reference.ts`'s `types update <uuid> --inactive` example is annotated "the documented stand-in for delete".
 - [x] Updating a group/collective type surfaces the solo-only boundary as a clear error, not a raw 400. — `typesUpdate` checks `current.resource.kind` from the GET it already performs and rejects pre-flight (zero PATCH attempts) rather than only pattern-matching a live 400; see "a group event type surfaces the solo-only boundary without attempting a PATCH".
-- [ ] `types create --one-off` produces a dated type visible in `types list --all`. — Blocked on the `date_setting` shape below being live-confirmed; the POST body shape and detail-view rendering are unit-tested, but visibility in a live `types list --all` is unverified.
-- [ ] `types availability <t> --rules @rules.json` round-trips: read → modify → PATCH → read shows the change. — PATCH request/response plumbing is unit-tested (mocked), but the actual round-trip against a live account, including the PATCH response envelope shape, is unverified.
+- [x] `types create --one-off` produces a dated type visible in `types list --all`. *(Live-verified 2026-08-12 — the guessed `date_setting: { type: "date_range", start_date, end_date }` shape is correct; the created one-off arrived active and was deactivated after.)*
+- [x] `types availability <t> --rules @rules.json` round-trips: read → modify → PATCH → read shows the change. *(Live-verified 2026-08-12 via `@file` on a throwaway type — PATCH response envelope renders the updated rule as expected.)*
 
 ## Risks / unknowns
 

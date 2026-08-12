@@ -23,7 +23,7 @@ pr: 5
 
 - [x] `webhooks` (no config beyond auth) lists org-scope subscriptions; `--scope user` defaults user to self.
 - [x] `create` with an unknown event → exit 2 listing valid events; `meeting_recap.*` under org scope → per-scope constraint error, zero API calls.
-- [ ] Live (paid account): create against a test HTTPS endpoint → detail output; duplicate create → existing subscription reported, exit 0; delete → gone; repeat delete → no-op exit 0.
+- [x] Live (paid account): create against a test HTTPS endpoint → detail output; duplicate create → existing subscription reported, exit 0; delete → gone; repeat delete → no-op exit 0. *(Live-verified 2026-08-12 via an ngrok tunnel — including the real duplicate 409, resolving this plan's open Risk.)*
 - [x] `sample --event invitee.created` returns a rendered payload; oversized payloads note total size.
 - [x] Config file never contains a signing key after a `--signing-key` create (test asserts).
 
