@@ -1,5 +1,6 @@
 ---
-status: planned
+status: done
+pr: 12
 depends: []
 specs:
   - specs/behaviors/time-windows.md
@@ -38,10 +39,10 @@ The spec deltas in this branch's `docs(specs)` commit across the ten files liste
 
 - [ ] `events --window today`, `busy --window week`, `types slots <t> --window tomorrow` resolve calendar-aligned windows in the profile timezone (unit + live spot-check); combining `--window` with `--since`/`--from` → `VALIDATION_ERROR` naming the conflict.
 - [ ] `link "<teammate-type-name>" --org` resolves a type the caller doesn't own (unit-tested with fixtures; live spot-check if an org-mate type exists).
-- [ ] All six surfaces reject `--org` no longer as unknown flag; ids/URIs bypass the sweep unchanged.
-- [ ] Org-scoped `FORBIDDEN` on `events --org` / `types list --org` output includes the drop-`--org` suggestion (fixture).
-- [ ] Duplicate-webhook no-op only matches subscriptions with identical url AND events set (fixture: same url, different events → not treated as duplicate).
-- [ ] `not-implemented.ts` gone; `bun run check && bun run test && bun run docs:check` clean.
+- [x] All six surfaces reject `--org` no longer as unknown flag; ids/URIs bypass the sweep unchanged.
+- [x] Org-scoped `FORBIDDEN` on `events --org` / `types list --org` output includes the drop-`--org` suggestion (fixture).
+- [x] Duplicate-webhook no-op only matches subscriptions with identical url AND events set (fixture: same url, different events → not treated as duplicate).
+- [x] `not-implemented.ts` gone; `bun run check && bun run test && bun run docs:check` clean.
 
 ## Risks / unknowns
 
@@ -49,7 +50,16 @@ The spec deltas in this branch's `docs(specs)` commit across the ten files liste
 
 ## Notes
 
-_(closeout)_
+Implemented in PR #12 (branch `audit-remediation`, off `develop`). All six scope
+items landed; `bun run check && bun run build && bun run test && bun run docs:check`
+clean (332/332 tests). The two unchecked Validation boxes above are unit/fixture-clean
+already — `resolveWindow`'s named-window math and the `--window` conflict check are
+covered in `test/time/windows.test.ts`, and each command's `--window`/`--org` wiring
+has fixture tests in `test/commands/{events,busy,types,link,book}.test.ts` — but they
+name a **live spot-check** half (calendar-aligned windows against a real profile
+timezone; `link --org` against an actual teammate-owned type) that this session
+can't perform. Left unchecked for the orchestrator to verify against a live account
+post-merge.
 
 ## Follow-ups
 
