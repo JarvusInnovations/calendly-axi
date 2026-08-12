@@ -23,7 +23,7 @@ specs/
 └── commands/              # one file per command surface
     ├── home.md             # no-args ambient view
     ├── auth.md             # PAT setup, whoami, logout + doctor
-    ├── hook.md             # session-hook install/status/uninstall
+    ├── setup.md            # session-hook lifecycle (setup hooks [status|uninstall])
     ├── types.md            # event types: list/view/slots/create/update/availability
     ├── events.md           # scheduled events: list/view/invitees/cancel/no-show
     ├── book.md             # book a meeting via the Scheduling API
