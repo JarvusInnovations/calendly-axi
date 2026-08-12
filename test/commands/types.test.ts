@@ -620,6 +620,113 @@ describe("types create", () => {
     expect(err.message).toContain("color: must be a valid hex color");
   });
 
+  describe("--location-kind", () => {
+    it("--location-kind google_conference maps to [{kind}]", async () => {
+      vi.spyOn(globalThis, "fetch").mockImplementationOnce(async (_url, init) => {
+        const body = JSON.parse(String((init as RequestInit).body));
+        expect(body.locations).toEqual([{ kind: "google_conference" }]);
+        return jsonResponse(CREATED, 201);
+      });
+      await typesCommand([
+        "create",
+        "--name",
+        "Intro Call",
+        "--duration",
+        "30",
+        "--location-kind",
+        "google_conference",
+      ]);
+    });
+
+    it("--location-kind physical --location-text maps to [{kind, location}]", async () => {
+      vi.spyOn(globalThis, "fetch").mockImplementationOnce(async (_url, init) => {
+        const body = JSON.parse(String((init as RequestInit).body));
+        expect(body.locations).toEqual([{ kind: "physical", location: "123 Main St" }]);
+        return jsonResponse(CREATED, 201);
+      });
+      await typesCommand([
+        "create",
+        "--name",
+        "Intro Call",
+        "--duration",
+        "30",
+        "--location-kind",
+        "physical",
+        "--location-text",
+        "123 Main St",
+      ]);
+    });
+
+    it("combined with --locations is a VALIDATION_ERROR, exit 2, zero API calls", async () => {
+      const spy = vi.spyOn(globalThis, "fetch");
+      const err = await typesCommand([
+        "create",
+        "--name",
+        "Intro Call",
+        "--duration",
+        "30",
+        "--location-kind",
+        "physical",
+        "--locations",
+        '[{"kind":"physical","location":"123 Main St"}]',
+      ]).catch((e) => e);
+      expect(err.code).toBe("VALIDATION_ERROR"); // maps to exit 2 via USAGE_CODES (src/cli.ts)
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("an unknown kind is a VALIDATION_ERROR listing valid kinds, zero API calls", async () => {
+      const spy = vi.spyOn(globalThis, "fetch");
+      const err = await typesCommand([
+        "create",
+        "--name",
+        "Intro Call",
+        "--duration",
+        "30",
+        "--location-kind",
+        "not_a_real_kind",
+      ]).catch((e) => e);
+      expect(err.code).toBe("VALIDATION_ERROR"); // maps to exit 2 via USAGE_CODES (src/cli.ts)
+      expect(err.suggestions.join(" ")).toContain("physical");
+      expect(err.suggestions.join(" ")).toContain("google_conference");
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("--location-text without --location-kind is a VALIDATION_ERROR, zero API calls", async () => {
+      const spy = vi.spyOn(globalThis, "fetch");
+      const err = await typesCommand([
+        "create",
+        "--name",
+        "Intro Call",
+        "--duration",
+        "30",
+        "--location-text",
+        "123 Main St",
+      ]).catch((e) => e);
+      expect(err.code).toBe("VALIDATION_ERROR");
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("--one-off --location-kind maps to a singular location object (not array)", async () => {
+      vi.spyOn(globalThis, "fetch").mockImplementationOnce(async (_url, init) => {
+        const body = JSON.parse(String((init as RequestInit).body));
+        expect(body.location).toEqual({ kind: "google_conference" });
+        return jsonResponse(CREATED, 201);
+      });
+      await typesCommand([
+        "create",
+        "--one-off",
+        "--name",
+        "Ad-hoc Sync",
+        "--duration",
+        "15",
+        "--date",
+        "2026-08-18",
+        "--location-kind",
+        "google_conference",
+      ]);
+    });
+  });
+
   describe("--one-off", () => {
     it("POSTs to one_off_event_types with a single date parsed into a date_range", async () => {
       const spy = vi.spyOn(globalThis, "fetch").mockImplementationOnce(async (_url, init) => {
@@ -779,6 +886,45 @@ describe("types update", () => {
     const out = await typesCommand(["update", "T1", "--duration", "45"]);
     expect(out).not.toContain("note:");
     expect(out).not.toContain("rename");
+  });
+
+  it("diff echo: both changed fields render old → new; unchanged fields absent", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse(soloType({ name: "Intro Call", duration: 30 })))
+      .mockResolvedValueOnce(jsonResponse(soloType({ name: "New Name", duration: 45 })));
+    const out = await typesCommand(["update", "T1", "--name", "New Name", "--duration", "30"]);
+    expect(out).toContain("changed:");
+    expect(out).toContain("name: Intro Call → New Name");
+    expect(out).toContain("duration: 30 → 45");
+  });
+
+  it("diff echo: a field resupplied with its already-current value stays out of the diff", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse(soloType({ name: "Intro Call", duration: 30 })))
+      .mockResolvedValueOnce(jsonResponse(soloType({ name: "Intro Call", duration: 45 })));
+    const out = await typesCommand(["update", "T1", "--name", "Intro Call", "--duration", "30"]);
+    expect(out).toContain("changed:");
+    expect(out).toContain("duration: 30 → 45");
+    expect(out).not.toMatch(/\bname: Intro Call → Intro Call\b/);
+  });
+
+  it("diff echo composes with the rename note (both present)", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse(soloType({ name: "Intro Call" })))
+      .mockResolvedValueOnce(jsonResponse(soloType({ name: "New Name" })));
+    const out = await typesCommand(["update", "T1", "--name", "New Name"]);
+    expect(out).toContain("changed:");
+    expect(out).toContain("name: Intro Call → New Name");
+    expect(out).toContain("note:");
+    expect(out).toContain("rename");
+  });
+
+  it("the no-op path is unaffected by the diff echo — no `changed:` block", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse(soloType()));
+    const out = await typesCommand(["update", "T1"]);
+    expect(out).toContain("no-op");
+    expect(out).not.toContain("changed:");
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 
   it("a group event type surfaces the solo-only boundary without attempting a PATCH", async () => {

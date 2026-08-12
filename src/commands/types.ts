@@ -328,6 +328,66 @@ async function typesSlots(parsed: Parsed, creds: Credentials): Promise<string> {
 
 // ── types create ─────────────────────────────────────────────────────
 
+// LocationConfiguration `kind` values (specs/api/event-types.md) — used to
+// validate `--location-kind` client-side so an unrecognized kind fails fast
+// (VALIDATION_ERROR, exit 2) rather than round-tripping to the API's 400.
+// Conferencing kinds mirror book.ts's AUTO_DEFAULT_LOCATION_KINDS (both the
+// short and `_conference`-suffixed forms — the API's exact naming per kind
+// isn't independently confirmed, so both ride along defensively, same as
+// there); physical/custom/ask_invitee/outbound_call/inbound_call round out
+// the full set from Calendly's location-kind reference.
+const LOCATION_KINDS = new Set([
+  "physical",
+  "outbound_call",
+  "inbound_call",
+  "ask_invitee",
+  "custom",
+  "google_conference",
+  "zoom",
+  "zoom_conference",
+  "gotomeeting",
+  "gotomeeting_conference",
+  "webex",
+  "webex_conference",
+  "microsoft_teams_conference",
+]);
+
+/**
+ * `--location-kind <kind> [--location-text <text>]` — single-location sugar
+ * over `--locations` (specs/commands/types.md). Mutually exclusive with
+ * `--locations`; validated network-free so a bad combination or unknown kind
+ * fails before any request. Returns the single location object (unwrapped —
+ * callers array-wrap for the standard create body, or use it directly for
+ * `one_off_event_types`' singular `location` field).
+ */
+function buildLocationKindSugar(parsed: Parsed, hasLocations: boolean): Record<string, unknown> | undefined {
+  const kind = str(parsed, "--location-kind");
+  const text = str(parsed, "--location-text");
+
+  if (kind === undefined) {
+    if (text !== undefined) {
+      throw new AxiError("--location-text requires --location-kind", "VALIDATION_ERROR", [
+        'Pass both, e.g. --location-kind physical --location-text "123 Main St"',
+      ]);
+    }
+    return undefined;
+  }
+
+  if (hasLocations) {
+    throw new AxiError("--location-kind is mutually exclusive with --locations", "VALIDATION_ERROR", [
+      "--location-kind is single-location sugar over --locations — pass one or the other",
+    ]);
+  }
+
+  if (!LOCATION_KINDS.has(kind)) {
+    throw new AxiError(`--location-kind "${kind}" is not a known location kind`, "VALIDATION_ERROR", [
+      `Valid kinds: ${[...LOCATION_KINDS].sort().join(", ")}`,
+    ]);
+  }
+
+  return text !== undefined ? { kind, location: text } : { kind };
+}
+
 const DATE_RANGE_RE = /^(\d{4}-\d{2}-\d{2})(?:\.\.(\d{4}-\d{2}-\d{2}))?$/;
 
 /**
@@ -393,6 +453,7 @@ async function typesCreate(parsed: Parsed, creds: Credentials): Promise<string> 
   const duration = requiredDuration(parsed);
   const locationsRaw = str(parsed, "--locations");
   const locations = locationsRaw !== undefined ? readJsonFlag(locationsRaw, "--locations") : undefined;
+  const singleLocation = buildLocationKindSugar(parsed, locations !== undefined);
 
   if (oneOff) {
     const dateRaw = str(parsed, "--date");
@@ -411,6 +472,7 @@ async function typesCreate(parsed: Parsed, creds: Credentials): Promise<string> 
     if (timezone) body.timezone = timezone;
     if (coHosts?.length) body.co_hosts = coHosts;
     if (locations !== undefined) body.location = locations;
+    else if (singleLocation !== undefined) body.location = singleLocation;
 
     const res = await calendlyRequest<{ resource: EventTypeResource }>("one_off_event_types", {
       method: "POST",
@@ -436,6 +498,7 @@ async function typesCreate(parsed: Parsed, creds: Credentials): Promise<string> 
   const color = str(parsed, "--color");
   if (color) body.color = color;
   if (locations !== undefined) body.locations = locations;
+  else if (singleLocation !== undefined) body.locations = [singleLocation];
   if (bool(parsed, "--inactive")) body.active = false;
 
   const res = await calendlyRequest<{ resource: EventTypeResource }>("event_types", {
@@ -447,6 +510,41 @@ async function typesCreate(parsed: Parsed, creds: Credentials): Promise<string> 
 }
 
 // ── types update ─────────────────────────────────────────────────────
+
+/** `old → new` for a single diff value — TOON-safe scalars pass through, everything else is JSON-compact. */
+function formatDiffValue(value: unknown): string {
+  if (value === undefined || value === null) return "—";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value);
+}
+
+/**
+ * Diff echo (specs/commands/types.md): for each field actually sent in the
+ * PATCH `body`, compare the pre-flight GET (`current`) against the PATCH
+ * response (`updated`) and render `old → new` — only for fields whose value
+ * actually changed, so a same-value field the caller happened to resupply
+ * stays silent. `description` maps to the resource's `description_plain`;
+ * every other body key matches its resource field name directly.
+ */
+function typeFieldDiff(
+  current: EventTypeResource,
+  updated: EventTypeResource,
+  body: Record<string, unknown>,
+): Record<string, string> {
+  const changed: Record<string, string> = {};
+  const track = (key: string, oldValue: unknown, newValue: unknown) => {
+    if (!(key in body)) return;
+    if (JSON.stringify(oldValue) === JSON.stringify(newValue)) return;
+    changed[key] = `${formatDiffValue(oldValue)} → ${formatDiffValue(newValue)}`;
+  };
+  track("name", current.name, updated.name);
+  track("duration", current.duration, updated.duration);
+  track("description", current.description_plain, updated.description_plain);
+  track("color", current.color, updated.color);
+  track("locations", current.locations, updated.locations);
+  track("active", current.active, updated.active);
+  return changed;
+}
 
 async function typesUpdate(parsed: Parsed, creds: Credentials): Promise<string> {
   const typeArg = requirePositional(
@@ -529,21 +627,31 @@ async function typesUpdate(parsed: Parsed, creds: Credentials): Promise<string> 
       body,
     });
     const detail = renderEventTypeDetail(res.resource, false);
+    const blocks = [detail];
+
+    // Diff echo (specs/commands/types.md): every field actually sent, whose
+    // value actually changed, rendered `old → new` — derived from the
+    // pre-flight GET this handler already did for the no-op check plus the
+    // PATCH response, so batch edits are verifiable without a follow-up
+    // `view`. Composes with the rename note below (both can appear).
+    const changed = typeFieldDiff(current.resource, res.resource, body);
+    if (Object.keys(changed).length > 0) {
+      blocks.push(renderObject({ changed }));
+    }
+
     // Rename warning (specs/commands/types.md): the API silently ignores
     // `slug` writes (specs/api/event-types.md's silent-ignore quirk), so a
     // renamed type's scheduling_url would otherwise look unchanged with no
-    // signal why. Fires whenever --name was supplied, mirroring the "no
-    // per-field diff yet" shape of the rest of this handler (diff echo
-    // lands with types-ergonomics).
+    // signal why. Fires whenever --name was supplied.
     if (name !== undefined) {
-      return joinBlocks(
-        detail,
+      blocks.push(
         renderObject({
           note: "the slug and scheduling_url do not follow the rename — the old booking URL keeps working; the new name only shows on the booking page",
         }),
       );
     }
-    return detail;
+
+    return joinBlocks(...blocks);
   } catch (err) {
     // Defense in depth: the `kind` check above should catch the solo-only
     // boundary before any request, but if the API still rejects with a

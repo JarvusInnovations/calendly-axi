@@ -28,7 +28,7 @@ Key resource fields consumed: `uri`, `name`, `active`, `duration`, `duration_opt
 - **There is no delete.** `DELETE /event_types/{uuid}` → 404 (probed live). `PATCH` with `active: false` deactivates; that is the strongest removal the API offers.
 - **Slugs are UI-only.** `slug`/`scheduling_url` derive from the name at create time and are frozen thereafter — `slug` in a PATCH body is silently ignored. A rename never moves the booking URL.
 - **Custom questions are UI-only.** `custom_questions` is readable but silently ignored in both POST and PATCH bodies (probed live both ways). Re-probe periodically — the silent-ignore pattern means writability could ship unannounced.
-- `locations[]` entries are structured objects (`kind` + kind-specific fields, e.g. `{ "kind": "physical", "location": "..." }`, `{ "kind": "custom", "location": "..." }`, conferencing kinds); the API rejects malformed kinds with 400 details we restate.
+- `locations[]` entries are structured objects (`kind` + kind-specific fields, e.g. `{ "kind": "physical", "location": "..." }`, `{ "kind": "custom", "location": "..." }`, conferencing kinds); the API rejects malformed kinds with 400 details we restate. Known `kind` values (the `LocationConfiguration` enum, per Calendly's location-kind API reference — not exhaustively probed live): `physical`, `outbound_call`, `inbound_call`, `ask_invitee`, `custom`, `google_conference`, `zoom` / `zoom_conference`, `gotomeeting` / `gotomeeting_conference`, `webex` / `webex_conference`, `microsoft_teams_conference`. `types create --location-kind` validates against this set client-side, so an unrecognized kind fails fast rather than round-tripping to the API's 400.
 
 ## Availability
 
