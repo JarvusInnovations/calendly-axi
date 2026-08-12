@@ -21,7 +21,7 @@ pr: 19
 
 ## Validation
 
-- [x] `types create --owner <email>` resolves via org membership and creates on the teammate's page (fixture).
+- [x] `types create --owner <email>` resolves via org membership and creates on the teammate's page (fixture). *(Also live-verified 2026-08-12 post-merge: `--owner chris@jarv.us` resolved via org-membership email lookup end-to-end; rename note verified live. Cross-user creation rests on the recorded API probes.)*
 - [ ] Live spot-check against a throwaway on a consenting teammate — the probe artifacts from 2026-08-12 already demonstrate the API path.
 - [x] `--owner` with a non-admin token's 403 rides the role-gate translation (fixture).
 - [x] `types update <t> --name <new>` output includes the slug-unchanged warning; a no-name update doesn't.
