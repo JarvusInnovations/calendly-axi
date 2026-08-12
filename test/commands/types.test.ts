@@ -427,6 +427,92 @@ describe("types create", () => {
     expect(out).toContain("scheduling_url");
   });
 
+  it("--owner <email> resolves via organization_memberships and lands in the POST body's owner", async () => {
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({
+          collection: [
+            {
+              uri: "https://api.calendly.com/organization_memberships/M1",
+              organization: "https://api.calendly.com/organizations/ORG789",
+              user: { uri: "https://api.calendly.com/users/TEAMMATE1", email: "teammate@example.com" },
+            },
+          ],
+        }),
+      )
+      .mockImplementationOnce(async (_url, init) => {
+        const body = JSON.parse(String((init as RequestInit).body));
+        expect(body).toEqual({
+          name: "Intro Call",
+          owner: "https://api.calendly.com/users/TEAMMATE1",
+          duration: 30,
+        });
+        return jsonResponse(CREATED, 201);
+      });
+    await typesCommand([
+      "create",
+      "--name",
+      "Intro Call",
+      "--duration",
+      "30",
+      "--owner",
+      "teammate@example.com",
+    ]);
+    expect(spy).toHaveBeenCalledTimes(2);
+    const [lookupUrl] = spy.mock.calls[0]!;
+    expect(String(lookupUrl)).toContain("organization_memberships");
+    expect(String(lookupUrl)).toContain("email=teammate%40example.com");
+  });
+
+  it("--owner <uuid> resolves locally (no organization_memberships lookup) into the POST body's owner", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementationOnce(async (_url, init) => {
+      const body = JSON.parse(String((init as RequestInit).body));
+      expect(body).toEqual({
+        name: "Intro Call",
+        owner: "https://api.calendly.com/users/TEAMMATE2",
+        duration: 30,
+      });
+      return jsonResponse(CREATED, 201);
+    });
+    await typesCommand(["create", "--name", "Intro Call", "--duration", "30", "--owner", "TEAMMATE2"]);
+    expect(spy).toHaveBeenCalledTimes(1); // no lookup for a bare uuid
+  });
+
+  it("--owner <uri> resolves locally into the POST body's owner", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementationOnce(async (_url, init) => {
+      const body = JSON.parse(String((init as RequestInit).body));
+      expect(body.owner).toBe("https://api.calendly.com/users/TEAMMATE3");
+      return jsonResponse(CREATED, 201);
+    });
+    await typesCommand([
+      "create",
+      "--name",
+      "Intro Call",
+      "--duration",
+      "30",
+      "--owner",
+      "https://api.calendly.com/users/TEAMMATE3",
+    ]);
+  });
+
+  it("--owner's role-gate 403 rides the client's admin-role FORBIDDEN translation", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ title: "Forbidden", message: "requires admin role" }), { status: 403 }),
+    );
+    const err = await typesCommand([
+      "create",
+      "--name",
+      "Intro Call",
+      "--duration",
+      "30",
+      "--owner",
+      "TEAMMATE2",
+    ]).catch((e) => e);
+    expect(err.code).toBe("FORBIDDEN");
+    expect(err.suggestions.join(" ")).toContain("admin");
+  });
+
   it("--inactive creates an inactive type", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementationOnce(async (_url, init) => {
       const body = JSON.parse(String((init as RequestInit).body));
@@ -673,6 +759,26 @@ describe("types update", () => {
         return jsonResponse(soloType({ name: "New Name" }));
       });
     await typesCommand(["update", "T1", "--name", "New Name"]);
+  });
+
+  it("--name carries the rename warning that slug/scheduling_url don't follow the rename", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse(soloType()))
+      .mockResolvedValueOnce(jsonResponse(soloType({ name: "New Name" })));
+    const out = await typesCommand(["update", "T1", "--name", "New Name"]);
+    expect(out).toContain("note:");
+    expect(out).toContain("slug");
+    expect(out).toContain("scheduling_url");
+    expect(out).toContain("rename");
+  });
+
+  it("a no-name update carries no rename warning", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse(soloType()))
+      .mockResolvedValueOnce(jsonResponse(soloType({ duration: 45 })));
+    const out = await typesCommand(["update", "T1", "--duration", "45"]);
+    expect(out).not.toContain("note:");
+    expect(out).not.toContain("rename");
   });
 
   it("a group event type surfaces the solo-only boundary without attempting a PATCH", async () => {

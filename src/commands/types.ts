@@ -3,7 +3,7 @@ import { AxiError } from "axi-sdk-js";
 import { calendlyRequest, requireCredentials } from "../calendly/client.js";
 import { resolveEventTypeIdentifier, resolveIdentifier, uuidFromUri } from "../calendly/ids.js";
 import { paginate, paginationSummary } from "../calendly/paginate.js";
-import { resolveScope, resolveSelf, withOrgRoleHint } from "../calendly/scope.js";
+import { resolveScope, resolveSelf, resolveUserFlag, withOrgRoleHint } from "../calendly/scope.js";
 import type { Credentials } from "../config.js";
 import { bool, parseSubcommand, requirePositional, str, TYPES_FLAGS, type Parsed } from "../flags.js";
 import { computed, field, joinBlocks, renderHelp, renderListResponse, renderObject } from "../output/index.js";
@@ -421,7 +421,16 @@ async function typesCreate(parsed: Parsed, creds: Credentials): Promise<string> 
   }
 
   const self = await resolveSelf(creds);
-  const body: Record<string, unknown> = { name, owner: self.user_uri, duration };
+  // --owner (specs/commands/types.md): another org member's URI as the
+  // POST body's `owner` — the type lands on their scheduling page. Email
+  // resolves via org-membership lookup, UUID/URI resolve locally; both ride
+  // resolveUserFlag (specs/behaviors/scoping.md), the same resolver --user
+  // uses elsewhere. Default (no flag): self, unchanged. Server-side role
+  // gate (org-admin only) surfaces as a FORBIDDEN 403 via the client's
+  // standard error translation — no special handling needed here.
+  const ownerRaw = str(parsed, "--owner");
+  const owner = ownerRaw !== undefined ? await resolveUserFlag(ownerRaw, self, creds) : self.user_uri;
+  const body: Record<string, unknown> = { name, owner, duration };
   const description = str(parsed, "--description");
   if (description) body.description = description;
   const color = str(parsed, "--color");
@@ -519,7 +528,22 @@ async function typesUpdate(parsed: Parsed, creds: Credentials): Promise<string> 
       credentials: creds,
       body,
     });
-    return renderEventTypeDetail(res.resource, false);
+    const detail = renderEventTypeDetail(res.resource, false);
+    // Rename warning (specs/commands/types.md): the API silently ignores
+    // `slug` writes (specs/api/event-types.md's silent-ignore quirk), so a
+    // renamed type's scheduling_url would otherwise look unchanged with no
+    // signal why. Fires whenever --name was supplied, mirroring the "no
+    // per-field diff yet" shape of the rest of this handler (diff echo
+    // lands with types-ergonomics).
+    if (name !== undefined) {
+      return joinBlocks(
+        detail,
+        renderObject({
+          note: "the slug and scheduling_url do not follow the rename — the old booking URL keeps working; the new name only shows on the booking page",
+        }),
+      );
+    }
+    return detail;
   } catch (err) {
     // Defense in depth: the `kind` check above should catch the solo-only
     // boundary before any request, but if the API still rejects with a
