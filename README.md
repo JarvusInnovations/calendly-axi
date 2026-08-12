@@ -81,6 +81,9 @@ The hook gives you live data on every session; the skill is lower overhead and w
 Calendly's API has real walls. `calendly-axi` documents them at the point of need rather than papering over them:
 
 - **No delete for event types.** `types update <type> --inactive` deactivates — the strongest removal the API offers.
+- **Event type slugs are UI-only.** `slug`/`scheduling_url` derive from the name at create time and are frozen thereafter; renaming with `types update --name` never moves the booking URL, so `update` warns when a rename lands.
+- **Event type custom questions are UI-only.** `custom_questions` is readable via the API but not writable — `POST`/`PATCH` bodies carrying it are silently ignored.
+- **The API silently ignores unsupported write fields.** Both of the boundaries above return a plain 200 with the field left untouched rather than an error — `calendly-axi` never infers a field is writable just because a write succeeded.
 - **No reschedule endpoint.** Cancel with `events cancel` and rebook with `book` or `link`; invitees also carry their own `reschedule_url` for the invitee-driven path.
 - **No webhook update endpoint.** Changing a subscription's URL or events is `webhooks delete` + `webhooks create`.
 - **Event type writes are solo-only.** `types create`/`types update` work for one-on-one (`kind: solo`) types; group, collective, and round-robin types are read-only via the API.
