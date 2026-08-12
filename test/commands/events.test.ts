@@ -398,6 +398,54 @@ describe("events invitees", () => {
     expect(out).toContain("invitees[2]{uuid,name,email,status,no_show}:");
   });
 
+  it("renders the tracking UTM block when any field is non-null", async () => {
+    seedCache();
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      collection([
+        invitee({
+          tracking: {
+            utm_campaign: null,
+            utm_source: "newsletter",
+            utm_medium: null,
+            utm_content: null,
+            utm_term: null,
+            salesforce_uuid: null,
+          },
+        }),
+      ]),
+    );
+    const out = await eventsCommand(["invitees", "EVT1", "--email", "ada@example.com"]);
+    expect(out).toContain("tracking:");
+    expect(out).toContain("utm_source: newsletter");
+    expect(out).toContain("utm_campaign:");
+  });
+
+  it("omits the tracking block entirely when every field is null", async () => {
+    seedCache();
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      collection([
+        invitee({
+          tracking: {
+            utm_campaign: null,
+            utm_source: null,
+            utm_medium: null,
+            utm_content: null,
+            utm_term: null,
+            salesforce_uuid: null,
+          },
+        }),
+      ]),
+    );
+    const out = await eventsCommand(["invitees", "EVT1", "--email", "ada@example.com"]);
+    expect(out).not.toContain("tracking:");
+  });
+
+  it("omits the tracking block when the invitee has no tracking field at all", async () => {
+    seedCache();
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(collection([invitee()]));
+    const out = await eventsCommand(["invitees", "EVT1", "--email", "ada@example.com"]);
+    expect(out).not.toContain("tracking:");
+  });
 });
 
 describe("events cancel", () => {
@@ -577,5 +625,267 @@ describe("events no-show", () => {
     const spy = vi.spyOn(globalThis, "fetch");
     await expect(eventsCommand(["no-show"])).rejects.toMatchObject({ code: "USAGE" });
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe("events answers", () => {
+  function typeNameResponse(name = "30 Minute Meeting") {
+    return jsonResponse({ resource: { name } });
+  }
+
+  function answersEvent(overrides: Record<string, unknown> = {}) {
+    return {
+      uri: "https://api.calendly.com/scheduled_events/EVT1",
+      name: "Intro Call",
+      status: "active",
+      start_time: "2026-08-10T10:00:00Z",
+      end_time: "2026-08-10T10:30:00Z",
+      event_type: "https://api.calendly.com/event_types/ET1",
+      invitees_counter: { total: 1, active: 1, limit: 1 },
+      ...overrides,
+    };
+  }
+
+  function answersInvitee(overrides: Record<string, unknown> = {}) {
+    return {
+      uri: "https://api.calendly.com/scheduled_events/EVT1/invitees/INV1",
+      name: "Ada Lovelace",
+      email: "ada@example.com",
+      status: "active",
+      questions_and_answers: [],
+      tracking: {
+        utm_campaign: null,
+        utm_source: null,
+        utm_medium: null,
+        utm_content: null,
+        utm_term: null,
+        salesforce_uuid: null,
+      },
+      ...overrides,
+    };
+  }
+
+  it("requires --type, zero API calls", async () => {
+    seedCache();
+    const spy = vi.spyOn(globalThis, "fetch");
+    const err = await eventsCommand(["answers"]).catch((e) => e);
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toContain("--type");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("drains multi-page events, filters client-side by type, drains each match's invitees, one row per Q&A sorted start-desc", async () => {
+    seedCache();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(typeNameResponse())
+      .mockResolvedValueOnce(
+        collection(
+          [
+            answersEvent(), // EVT1, ET1, 2026-08-10 — matches
+            answersEvent({
+              uri: "https://api.calendly.com/scheduled_events/EVT2",
+              event_type: "https://api.calendly.com/event_types/ET2", // other type — excluded
+            }),
+          ],
+          "PAGE2",
+        ),
+      )
+      .mockResolvedValueOnce(
+        collection([
+          answersEvent({
+            uri: "https://api.calendly.com/scheduled_events/EVT3",
+            start_time: "2026-08-12T10:00:00Z", // later — should sort first
+          }),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        collection([
+          answersInvitee({
+            questions_and_answers: [{ question: "Company?", answer: "Jarvus", position: 0 }],
+          }),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        collection([
+          answersInvitee({
+            uri: "https://api.calendly.com/scheduled_events/EVT3/invitees/INV2",
+            email: "grace@example.com",
+            questions_and_answers: [{ question: "Role?", answer: "Engineer", position: 0 }],
+          }),
+        ]),
+      );
+
+    const out = await eventsCommand(["answers", "--type", "ET1"]);
+
+    expect(spy).toHaveBeenCalledTimes(5);
+    // event_type filter never reaches the events-list query — client-side only.
+    const eventsUrl = queryOf(spy.mock.calls[1]![0]);
+    expect(eventsUrl.get("event_type")).toBeNull();
+    // EVT2's invitees are never fetched — filtered out before the invitee drain.
+    expect(String(spy.mock.calls[3]![0])).toContain("/scheduled_events/EVT1/invitees");
+    expect(String(spy.mock.calls[4]![0])).toContain("/scheduled_events/EVT3/invitees");
+
+    expect(out).toContain("type: 30 Minute Meeting");
+    expect(out).toContain("events: 2");
+    expect(out).toContain("invitees: 2");
+    expect(out).toContain("answers[2]{start,email,question,answer}:");
+
+    // Sorted start-desc: EVT3 (Engineer, 08-12) before EVT1 (Jarvus, 08-10).
+    expect(out.indexOf("Engineer")).toBeLessThan(out.indexOf("Jarvus"));
+  });
+
+  it("--utm swaps the schema to one row per invitee's UTM fields", async () => {
+    seedCache();
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(typeNameResponse())
+      .mockResolvedValueOnce(collection([answersEvent()]))
+      .mockResolvedValueOnce(
+        collection([
+          answersInvitee({
+            tracking: {
+              utm_campaign: "summer-sale",
+              utm_source: "newsletter",
+              utm_medium: "email",
+              utm_content: null,
+              utm_term: null,
+              salesforce_uuid: null,
+            },
+          }),
+        ]),
+      );
+
+    const out = await eventsCommand(["answers", "--type", "ET1", "--utm"]);
+
+    expect(out).toContain("answers[1]{start,email,utm_source,utm_medium,utm_campaign}:");
+    expect(out).toContain("newsletter");
+    expect(out).toContain("email");
+    expect(out).toContain("summer-sale");
+  });
+
+  it("--status all drops the status filter from both the events and invitees queries", async () => {
+    seedCache();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(typeNameResponse())
+      .mockResolvedValueOnce(collection([answersEvent()]))
+      .mockResolvedValueOnce(collection([answersInvitee()]));
+
+    await eventsCommand(["answers", "--type", "ET1", "--status", "all"]);
+
+    expect(queryOf(spy.mock.calls[1]![0]).get("status")).toBeNull();
+    expect(queryOf(spy.mock.calls[2]![0]).get("status")).toBeNull();
+  });
+
+  it("defaults --status to active on both queries", async () => {
+    seedCache();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(typeNameResponse())
+      .mockResolvedValueOnce(collection([answersEvent()]))
+      .mockResolvedValueOnce(collection([answersInvitee()]));
+
+    await eventsCommand(["answers", "--type", "ET1"]);
+
+    expect(queryOf(spy.mock.calls[1]![0]).get("status")).toBe("active");
+    expect(queryOf(spy.mock.calls[2]![0]).get("status")).toBe("active");
+  });
+
+  it("rejects an invalid --status value, zero API calls", async () => {
+    seedCache();
+    const spy = vi.spyOn(globalThis, "fetch");
+    await expect(eventsCommand(["answers", "--type", "ET1", "--status", "bogus"])).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+    });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("defaults the window to a 30d lookback with an open future bound", async () => {
+    // The API filters on event START time and attribution mostly concerns
+    // future bookings, so the default must not cap at "now" — see
+    // specs/commands/events.md (discovered live: a lookback-only default
+    // silently missed a future-starting booking).
+    seedCache();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(typeNameResponse())
+      .mockResolvedValueOnce(collection([]));
+
+    const out = await eventsCommand(["answers", "--type", "ET1"]);
+
+    const eventsUrl = queryOf(spy.mock.calls[1]![0]);
+    expect(eventsUrl.get("min_start_time")).toBeTruthy();
+    expect(eventsUrl.get("max_start_time")).toBeNull();
+    expect(out).toContain("last 30d + upcoming");
+  });
+
+  it("a definitive empty state names the type, window, and zero counts when no events match", async () => {
+    seedCache();
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(typeNameResponse())
+      .mockResolvedValueOnce(collection([]));
+
+    const out = await eventsCommand(["answers", "--type", "ET1"]);
+    expect(out).toContain("0 answers for");
+    expect(out).toContain("30 Minute Meeting");
+    expect(out).toContain("events: 0");
+    expect(out).toContain("invitees: 0");
+  });
+
+  it("a definitive empty state when events match but carry no Q&A answers", async () => {
+    seedCache();
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(typeNameResponse())
+      .mockResolvedValueOnce(collection([answersEvent()]))
+      .mockResolvedValueOnce(collection([answersInvitee({ questions_and_answers: [] })]));
+
+    const out = await eventsCommand(["answers", "--type", "ET1"]);
+    expect(out).toContain("events: 1");
+    expect(out).toContain("invitees: 1");
+    expect(out).toContain("0 answers for");
+  });
+
+  it("--window combined with --since is a VALIDATION_ERROR naming the conflict, no events sweep", async () => {
+    seedCache();
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(typeNameResponse());
+    const err = await eventsCommand(["answers", "--type", "ET1", "--window", "today", "--since", "7d"]).catch(
+      (e) => e,
+    );
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toContain("--window");
+    // The type-name fetch happens before window resolution (same shape as
+    // `types slots`), but the events sweep never fires.
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("--org widens both name resolution and the event sweep to organization scope", async () => {
+    seedCache();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(typeNameResponse())
+      .mockResolvedValueOnce(collection([]));
+
+    await eventsCommand(["answers", "--type", "ET1", "--org"]);
+
+    const eventsUrl = queryOf(spy.mock.calls[1]![0]);
+    expect(eventsUrl.get("organization")).toBe("https://api.calendly.com/organizations/ORG789");
+    expect(eventsUrl.get("user")).toBeNull();
+  });
+
+  it("resolves --type by name against self scope, then reuses the resolved uuid", async () => {
+    seedCache();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        collection([{ uri: "https://api.calendly.com/event_types/ET1", name: "30 Minute Meeting" }]),
+      )
+      .mockResolvedValueOnce(typeNameResponse())
+      .mockResolvedValueOnce(collection([]));
+
+    await eventsCommand(["answers", "--type", "30 Minute Meeting"]);
+
+    const nameSweepUrl = queryOf(spy.mock.calls[0]![0]);
+    expect(nameSweepUrl.get("user")).toBe("https://api.calendly.com/users/ABC123");
+    expect(String(spy.mock.calls[1]![0])).toContain("/event_types/ET1");
   });
 });

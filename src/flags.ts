@@ -223,9 +223,12 @@ export const TYPES_FLAGS: Record<string, FlagSpec> = {
     value: [
       "--name",
       "--duration",
+      "--owner",
       "--description",
       "--color",
       "--locations",
+      "--location-kind",
+      "--location-text",
       "--date",
       "--timezone",
       "--co-hosts",
@@ -246,6 +249,10 @@ export const EVENTS_FLAGS: Record<string, FlagSpec> = {
   },
   view: {},
   invitees: { value: ["--status", "--email"] },
+  answers: {
+    value: ["--type", "--from", "--to", "--since", "--until", "--window", "--status"],
+    boolean: ["--org", "--utm"],
+  },
   cancel: { value: ["--reason"] },
   "no-show": { value: ["--event"], boolean: ["--undo"] },
 };

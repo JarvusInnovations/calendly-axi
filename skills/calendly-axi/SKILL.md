@@ -65,19 +65,21 @@ npx -y calendly-axi setup hooks uninstall
 
 ## Booking loop
 
-### `calendly-axi events [list|view|invitees|cancel|no-show] [<args>] [flags]`
+### `calendly-axi events [list|view|invitees|answers|cancel|no-show] [<args>] [flags]`
 
-List upcoming events, inspect invitees, cancel, and mark no-shows
+List upcoming events, inspect invitees, aggregate booking answers, cancel, and mark no-shows
 
 Flags:
 
-- --status active|canceled     filter by event status (list/invitees)
-- --email <invitee-email>      filter/select by invitee email
-- --from/--to/--since/--until  time window (list; default: upcoming)
-- --window today|tomorrow|week calendar-aligned window (list; mutually exclusive with --from/--to/--since/--until)
-- --org                        organization-wide instead of self-scoped
-- --user <who>                 scope to another user
+- --status active|canceled|all filter by event/invitee status (list/invitees: active|canceled; answers: also all)
+- --email <invitee-email>      filter/select by invitee email (list/invitees)
+- --from/--to/--since/--until  time window (list default: upcoming; answers default: --since 30d)
+- --window today|tomorrow|week calendar-aligned window (list/answers; mutually exclusive with --from/--to/--since/--until)
+- --org                        organization-wide instead of self-scoped (list/answers)
+- --user <who>                 scope to another user (list)
 - --limit <n>                  cap the result count (list; default 100)
+- --type <event-type>          required — UUID, URI, or name, resolved against scope (answers)
+- --utm                        swap the answers schema to one row per invitee's UTM tracking fields (answers)
 - --reason <text>               cancellation reason (cancel)
 - no reschedule endpoint — cancel and rebook with `book` or `link`; invitees hold their own reschedule_url (cancel)
 - --undo                        clear a no-show mark (no-show)
@@ -90,6 +92,9 @@ npx -y calendly-axi events --window today
 npx -y calendly-axi events view <uuid>
 npx -y calendly-axi events invitees <uuid>
 npx -y calendly-axi events invitees <uuid> --email "ada@example.com"
+npx -y calendly-axi events answers --type "30 Minute Meeting"
+npx -y calendly-axi events answers --type <uuid> --since 90d --org
+npx -y calendly-axi events answers --type <uuid> --utm
 npx -y calendly-axi events cancel <uuid> --reason "scheduling conflict"
 npx -y calendly-axi events no-show <invitee-uuid> --event <event-uuid>
 npx -y calendly-axi events no-show <invitee-uuid> --event <event-uuid> --undo
@@ -157,12 +162,16 @@ Flags:
 - --full                show the untruncated description (view)
 - --from/--to/--until/--window   slot-lookup window (slots; default 7d, cap 31d; --window is mutually exclusive with the others)
 - --name/--duration/--description/--color   scalar fields (create/update; name+duration required on create)
+- --owner <who>         org member to create the type under, by UUID/URI/email (create; org-admin only — defaults to self)
 - --locations <json|@file>   structured location kinds, e.g. physical/custom/conferencing (create/update)
+- --location-kind <kind> [--location-text <text>]   single-location sugar over --locations (create; mutually exclusive with it)
 - --active/--inactive   reactivate, or the documented stand-in for delete (update); same-state is a no-op
 - --one-off             creates a dated one-off type instead of a standing solo type (create)
 - --date <date>[..<date>]   required with --one-off; a single date or an inclusive range
 - --timezone / --co-hosts <ids,>   one-off scheduling timezone and CSV of co-host user ids (create --one-off)
 - --rules <json|@file>  availability_rule to PATCH — omit to read the current rules (availability)
+- update echoes each changed field as `old → new`, computed from the pre-flight GET and the PATCH response
+- boundaries: no delete (--inactive is the stand-in); slugs are UI-only (a --name rename doesn't move scheduling_url — update warns); custom_questions are UI-only too — the API silently returns 200 on both, so a successful write never proves a field is writable
 
 ```sh
 npx -y calendly-axi types
@@ -174,9 +183,13 @@ npx -y calendly-axi types slots <uuid> --window tomorrow
 npx -y calendly-axi types availability <uuid>
 npx -y calendly-axi types create --name "Intro Call" --duration 30
 npx -y calendly-axi types create --name "Intro Call" --duration 30 --locations '[{"kind":"physical","location":"123 Main St"}]'
+npx -y calendly-axi types create --name "Intro Call" --duration 30 --location-kind google_conference
+npx -y calendly-axi types create --name "Intro Call" --duration 30 --location-kind physical --location-text "123 Main St"
+npx -y calendly-axi types create --name "Kickoff" --duration 30 --owner teammate@example.com
 npx -y calendly-axi types create --one-off --name "Ad-hoc Sync" --duration 15 --date 2026-08-18..2026-08-20 --timezone America/New_York
 npx -y calendly-axi types update <uuid> --locations @locations.json
 npx -y calendly-axi types update <uuid> --inactive   (the documented stand-in for delete)
+npx -y calendly-axi types update <uuid> --name "New Name" --duration 45   (output includes a `changed:` diff)
 npx -y calendly-axi types availability <uuid> --rules '{"rules":[{"type":"wday","wday":"monday","intervals":[{"from":"09:00","to":"17:00"}]}],"timezone":"America/New_York"}'
 ```
 
