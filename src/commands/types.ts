@@ -3,7 +3,7 @@ import { AxiError } from "axi-sdk-js";
 import { calendlyRequest, requireCredentials } from "../calendly/client.js";
 import { resolveEventTypeIdentifier, resolveIdentifier, uuidFromUri } from "../calendly/ids.js";
 import { paginate, paginationSummary } from "../calendly/paginate.js";
-import { resolveScope, resolveSelf } from "../calendly/scope.js";
+import { resolveScope, resolveSelf, withOrgRoleHint } from "../calendly/scope.js";
 import type { Credentials } from "../config.js";
 import { bool, parseSubcommand, requirePositional, str, TYPES_FLAGS, type Parsed } from "../flags.js";
 import { computed, field, joinBlocks, renderHelp, renderListResponse, renderObject } from "../output/index.js";
@@ -105,11 +105,13 @@ async function typesList(parsed: Parsed, creds: Credentials): Promise<string> {
   // default sends true. --all wins over --inactive if both are given.
   const activeFilter = all ? undefined : inactive ? false : true;
 
-  const result = await paginate<Record<string, unknown>>("event_types", {
-    ...scope,
-    ...(activeFilter !== undefined ? { active: activeFilter } : {}),
-    sort: "name:asc",
-  });
+  const result = await withOrgRoleHint(org, () =>
+    paginate<Record<string, unknown>>("event_types", {
+      ...scope,
+      ...(activeFilter !== undefined ? { active: activeFilter } : {}),
+      sort: "name:asc",
+    }),
+  );
 
   const scopeLabel = org ? "org-wide" : `for ${self.name}`;
   const activeLabel = all ? "" : inactive ? "inactive " : "active ";
@@ -192,11 +194,13 @@ function renderEventTypeDetail(resource: EventTypeResource, full: boolean): stri
 }
 
 async function typesView(parsed: Parsed, creds: Credentials): Promise<string> {
-  const typeArg = requirePositional(parsed, 0, "<type>", "calendly-axi types view <type> [--full]");
+  const typeArg = requirePositional(parsed, 0, "<type>", "calendly-axi types view <type> [--org] [--full]");
   const full = bool(parsed, "--full");
+  const org = bool(parsed, "--org");
 
   const self = await resolveSelf(creds);
-  const { uuid } = await resolveEventTypeIdentifier(typeArg, { user: self.user_uri });
+  const scope = await resolveScope({ org }, creds, self);
+  const { uuid } = await withOrgRoleHint(org, () => resolveEventTypeIdentifier(typeArg, { ...scope }));
 
   const res = await calendlyRequest<{ resource: EventTypeResource }>(`event_types/${uuid}`, {
     credentials: creds,
@@ -239,20 +243,27 @@ async function typesSlots(parsed: Parsed, creds: Credentials): Promise<string> {
     parsed,
     0,
     "<type>",
-    "calendly-axi types slots <type> [--from --to | --until <dur>]",
+    "calendly-axi types slots <type> [--from --to | --until <dur> | --window <name>] [--org]",
   );
 
   const from = str(parsed, "--from");
   const to = str(parsed, "--to");
-  if ((from !== undefined) !== (to !== undefined)) {
+  const namedWindow = str(parsed, "--window");
+  // --window's own conflict with --from/--to/--until is caught by
+  // resolveWindow itself; this earlier check only guards the from/to
+  // pairing when --window isn't in play.
+  if (namedWindow === undefined && (from !== undefined) !== (to !== undefined)) {
     throw new AxiError("`types slots` needs --from and --to together, or --until <dur> alone", "VALIDATION_ERROR", [
       "calendly-axi types slots <type> --from <date> --to <date>",
       "calendly-axi types slots <type> --until 14d",
+      "calendly-axi types slots <type> --window today",
     ]);
   }
 
+  const org = bool(parsed, "--org");
   const self = await resolveSelf(creds);
-  const { uuid, uri } = await resolveEventTypeIdentifier(typeArg, { user: self.user_uri });
+  const scope = await resolveScope({ org }, creds, self);
+  const { uuid, uri } = await withOrgRoleHint(org, () => resolveEventTypeIdentifier(typeArg, { ...scope }));
 
   // Fetched up front for the type's display name (empty/error messaging) —
   // one extra round trip, but slots without a name to attach them to reads
@@ -263,7 +274,7 @@ async function typesSlots(parsed: Parsed, creds: Credentials): Promise<string> {
   const name = detail.resource.name;
 
   const window = resolveWindow(
-    { from, to, until: str(parsed, "--until") },
+    { from, to, until: str(parsed, "--until"), named: namedWindow },
     { timeZone: self.timezone, default: { until: "7d" }, capDays: 31 },
   );
 
@@ -433,7 +444,7 @@ async function typesUpdate(parsed: Parsed, creds: Credentials): Promise<string> 
     parsed,
     0,
     "<type>",
-    "calendly-axi types update <type> [--name --duration --description --color --locations --active|--inactive]",
+    "calendly-axi types update <type> [--org] [--name --duration --description --color --locations --active|--inactive]",
   );
 
   if (bool(parsed, "--active") && bool(parsed, "--inactive")) {
@@ -455,9 +466,14 @@ async function typesUpdate(parsed: Parsed, creds: Credentials): Promise<string> 
   const locationsRaw = str(parsed, "--locations");
   const locations = locationsRaw !== undefined ? readJsonFlag(locationsRaw, "--locations") : undefined;
 
+  const org = bool(parsed, "--org");
   const self = await resolveSelf(creds);
-  const { uuid } = await resolveEventTypeIdentifier(typeArg, { user: self.user_uri });
+  const scope = await resolveScope({ org }, creds, self);
+  const { uuid } = await withOrgRoleHint(org, () => resolveEventTypeIdentifier(typeArg, { ...scope }));
 
+  // Pre-flight GET, the no-op check, and the PATCH itself are all keyed by
+  // the resolved uuid — --org only widens the name-resolution sweep above,
+  // per specs/behaviors/identifier-resolution.md.
   const current = await calendlyRequest<{ resource: EventTypeResource }>(`event_types/${uuid}`, {
     credentials: creds,
   });
@@ -528,15 +544,17 @@ async function typesAvailability(parsed: Parsed, creds: Credentials): Promise<st
     parsed,
     0,
     "<type>",
-    "calendly-axi types availability <type> [--rules <json|@file>]",
+    "calendly-axi types availability <type> [--org] [--rules <json|@file>]",
   );
 
   // Network-free: malformed --rules JSON fails before any request.
   const rulesRaw = str(parsed, "--rules");
   const rules = rulesRaw !== undefined ? readJsonFlag(rulesRaw, "--rules") : undefined;
 
+  const org = bool(parsed, "--org");
   const self = await resolveSelf(creds);
-  const { uuid, uri } = await resolveEventTypeIdentifier(typeArg, { user: self.user_uri });
+  const scope = await resolveScope({ org }, creds, self);
+  const { uuid, uri } = await withOrgRoleHint(org, () => resolveEventTypeIdentifier(typeArg, { ...scope }));
 
   if (rules !== undefined) {
     // `PATCH /event_type_availability_schedules` — response shape is

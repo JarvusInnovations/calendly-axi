@@ -184,3 +184,24 @@ export async function resolveScope(
 
   return scope;
 }
+
+/**
+ * Wrap an org-scoped call so a role-gate `FORBIDDEN` 403 gets the "drop
+ * --org" suggestion appended, per `specs/behaviors/scoping.md`: the shared
+ * client stays command-agnostic (it only names the role requirement, since
+ * it cannot know which flag produced the scope) — **the command that passed
+ * `--org` appends the hint itself**. Every command widening with `--org`
+ * (`events list`, `types list`, and the six name-resolution surfaces) wraps
+ * its org-scoped call with this instead of duplicating the catch/rethrow.
+ * A no-op when `orgFlag` is false, so callers can wrap unconditionally.
+ */
+export async function withOrgRoleHint<T>(orgFlag: boolean, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (orgFlag && err instanceof AxiError && err.code === "FORBIDDEN") {
+      throw new AxiError(err.message, err.code, [...err.suggestions, "Drop --org to use self scope"]);
+    }
+    throw err;
+  }
+}

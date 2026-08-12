@@ -30,7 +30,12 @@ export async function busyCommand(args: string[]) {
   const scope = await resolveScope({ user: userFlagRaw }, creds, self);
 
   const window = resolveWindow(
-    { from: str(parsed, "--from"), to: str(parsed, "--to"), until: str(parsed, "--until") },
+    {
+      from: str(parsed, "--from"),
+      to: str(parsed, "--to"),
+      until: str(parsed, "--until"),
+      named: str(parsed, "--window"),
+    },
     { timeZone: self.timezone, capDays: 7, default: { until: "7d" } },
   );
 

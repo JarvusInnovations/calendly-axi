@@ -243,6 +243,24 @@ export function resolveWindow(flags: WindowFlags, opts: ResolveWindowOptions = {
   const timeZone = opts.timeZone ?? "UTC";
   const now = opts.now ?? new Date();
 
+  // --window is mutually exclusive with every other window flag (time-windows.md)
+  // — checked up front so a combination never silently falls through to one
+  // flag winning over another.
+  if (flags.named !== undefined) {
+    const conflicts: string[] = [];
+    if (flags.from !== undefined) conflicts.push("--from");
+    if (flags.to !== undefined) conflicts.push("--to");
+    if (flags.since !== undefined) conflicts.push("--since");
+    if (flags.until !== undefined) conflicts.push("--until");
+    if (conflicts.length > 0) {
+      throw new AxiError(
+        `--window cannot be combined with ${conflicts.join(", ")}`,
+        "VALIDATION_ERROR",
+        ["--window is mutually exclusive with --from/--to/--since/--until — pass --window on its own"],
+      );
+    }
+  }
+
   let resolved: ResolvedWindow;
 
   if (flags.from !== undefined || flags.to !== undefined) {

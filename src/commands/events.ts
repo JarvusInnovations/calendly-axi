@@ -2,7 +2,7 @@ import { AxiError } from "axi-sdk-js";
 import { calendlyRequest, requireCredentials, type QueryValue } from "../calendly/client.js";
 import { resolveIdentifier, uuidFromUri } from "../calendly/ids.js";
 import { moreAvailableHint, paginate, paginationSummary } from "../calendly/paginate.js";
-import { resolveScope, resolveSelf } from "../calendly/scope.js";
+import { resolveScope, resolveSelf, withOrgRoleHint } from "../calendly/scope.js";
 import type { Credentials, ProfileCache } from "../config.js";
 import { EVENTS_FLAGS, bool, parseSubcommand, requirePositional, str, type Parsed } from "../flags.js";
 import { compact, joinBlocks, renderHelp, renderListResponse, renderObject } from "../output/index.js";
@@ -72,6 +72,7 @@ async function eventsList(parsed: Parsed) {
       to: str(parsed, "--to"),
       since: str(parsed, "--since"),
       until: str(parsed, "--until"),
+      named: str(parsed, "--window"),
     },
     { timeZone: self.timezone },
   );
@@ -106,7 +107,9 @@ async function eventsList(parsed: Parsed) {
     invitee_email: str(parsed, "--email"),
   };
 
-  const result = await paginate<Record<string, unknown>>("scheduled_events", query, limit);
+  const result = await withOrgRoleHint(orgFlag, () =>
+    paginate<Record<string, unknown>>("scheduled_events", query, limit),
+  );
 
   const showStatusColumn = status !== "active";
   const schema: FieldDef[] = [

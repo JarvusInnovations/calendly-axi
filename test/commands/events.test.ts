@@ -130,6 +130,27 @@ describe("events list: window and sort flip", () => {
     const [url] = spy.mock.calls[0]!;
     expect(queryOf(url).get("sort")).toBe("start_time:asc");
   });
+
+  it("--window today resolves a calendar-aligned window and echoes it in the header", async () => {
+    seedCache();
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(collection([event()]));
+    const out = await eventsCommand(["--window", "today"]);
+    const [url] = spy.mock.calls[0]!;
+    const q = queryOf(url);
+    expect(q.get("min_start_time")).toBeTruthy();
+    expect(q.get("max_start_time")).toBeTruthy();
+    expect(out).toContain("today");
+  });
+
+  it("--window combined with --from is a VALIDATION_ERROR naming the conflict, zero API calls", async () => {
+    seedCache();
+    const spy = vi.spyOn(globalThis, "fetch");
+    const err = await eventsCommand(["--window", "today", "--from", "2026-08-11"]).catch((e) => e);
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toContain("--window");
+    expect(err.message).toContain("--from");
+    expect(spy).not.toHaveBeenCalled();
+  });
 });
 
 describe("events list: status", () => {
@@ -171,6 +192,26 @@ describe("events list: scoping", () => {
     expect(spy).toHaveBeenCalledTimes(1); // only the scheduled_events call
     const [url] = spy.mock.calls[0]!;
     expect(queryOf(url).get("user")).toBe("https://api.calendly.com/users/OTHERUUID");
+  });
+
+  it("a role-gate FORBIDDEN on --org appends the drop---org suggestion", async () => {
+    seedCache();
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ title: "Forbidden", message: "requires admin role" }), { status: 403 }),
+    );
+    const err = await eventsCommand(["--org"]).catch((e) => e);
+    expect(err.code).toBe("FORBIDDEN");
+    expect(err.suggestions.join(" ")).toContain("Drop --org to use self scope");
+  });
+
+  it("a FORBIDDEN without --org is left untouched (no drop---org suggestion)", async () => {
+    seedCache();
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ title: "Forbidden", message: "missing scope" }), { status: 403 }),
+    );
+    const err = await eventsCommand([]).catch((e) => e);
+    expect(err.code).toBe("FORBIDDEN");
+    expect(err.suggestions.join(" ")).not.toContain("Drop --org");
   });
 });
 
