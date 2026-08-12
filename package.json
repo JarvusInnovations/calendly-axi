@@ -7,6 +7,8 @@
     "build": "tsc && chmod +x dist/bin/calendly-axi.js",
     "check": "tsc --noEmit",
     "dev": "bun bin/calendly-axi.ts",
+    "docs": "bun run scripts/generate-skill.ts",
+    "docs:check": "bun run scripts/generate-skill.ts --check",
     "prepublishOnly": "npm run build",
     "test:watch": "vitest"
   },
