@@ -74,6 +74,7 @@ Flags:
 - --status active|canceled     filter by event status (list/invitees)
 - --email <invitee-email>      filter/select by invitee email
 - --from/--to/--since/--until  time window (list; default: upcoming)
+- --window today|tomorrow|week calendar-aligned window (list; mutually exclusive with --from/--to/--since/--until)
 - --org                        organization-wide instead of self-scoped
 - --user <who>                 scope to another user
 - --limit <n>                  cap the result count (list; default 100)
@@ -85,6 +86,7 @@ Flags:
 
 ```sh
 npx -y calendly-axi events
+npx -y calendly-axi events --window today
 npx -y calendly-axi events view <uuid>
 npx -y calendly-axi events invitees <uuid>
 npx -y calendly-axi events invitees <uuid> --email "ada@example.com"
@@ -93,13 +95,14 @@ npx -y calendly-axi events no-show <invitee-uuid> --event <event-uuid>
 npx -y calendly-axi events no-show <invitee-uuid> --event <event-uuid> --undo
 ```
 
-### `calendly-axi link <event-type>`
+### `calendly-axi link <event-type> [--org]`
 
 Mint a single-use scheduling link for an event type — booking_url + resolved type, one booking then it dies
 
 Flags:
 
 - <event-type>   UUID, URI, or name — resolved against self scope
+- --org          widen name resolution organization-wide (e.g. a teammate's type)
 
 ```sh
 npx -y calendly-axi link "30 Minute Meeting"
@@ -120,23 +123,25 @@ Flags:
 - --location <json>     when the event type offers a location choice
 - --answer <pos>=<text> repeatable — custom-question answers
 - --guests <e,e,...>    additional invitee emails
+- --org                 widen --type name resolution organization-wide (ids/URIs unaffected)
 
 ```sh
 npx -y calendly-axi book --type <uuid> --at 2026-08-18T15:00:00Z --name "Ada Lovelace" --email ada@example.com
 ```
 
-### `calendly-axi busy [--from --to | --until <dur>] [--user <who>]`
+### `calendly-axi busy [--from --to | --until <dur> | --window <today|tomorrow|week>] [--user <who>]`
 
 Show busy intervals for the next 7 days (calendly events + connected-calendar blocks)
 
 Flags:
 
-- --from/--to/--until  time window (default: next 7 days; hard cap 7 days — over-cap fails fast)
-- --user <who>         scope to another user instead of self
+- --from/--to/--until/--window  time window (default: next 7 days; hard cap 7 days — over-cap fails fast; --window is mutually exclusive with the others)
+- --user <who>                  scope to another user instead of self
 
 ```sh
 npx -y calendly-axi busy
 npx -y calendly-axi busy --until 3d
+npx -y calendly-axi busy --window today
 ```
 
 ## Event types
@@ -147,10 +152,10 @@ List, inspect, and manage event types — bookable slots and availability rules
 
 Flags:
 
-- --org                 organization-wide listing (admin required; list)
+- --org                 organization-wide listing (admin required; list) — or, on view/update/slots/availability, widen name resolution organization-wide
 - --all / --inactive    include or restrict to inactive types (list)
 - --full                show the untruncated description (view)
-- --from/--to/--until   slot-lookup window (slots; default 7d, cap 31d)
+- --from/--to/--until/--window   slot-lookup window (slots; default 7d, cap 31d; --window is mutually exclusive with the others)
 - --name/--duration/--description/--color   scalar fields (create/update; name+duration required on create)
 - --locations <json|@file>   structured location kinds, e.g. physical/custom/conferencing (create/update)
 - --active/--inactive   reactivate, or the documented stand-in for delete (update); same-state is a no-op
@@ -163,7 +168,9 @@ Flags:
 npx -y calendly-axi types
 npx -y calendly-axi types view <uuid>
 npx -y calendly-axi types view <uuid> --full
+npx -y calendly-axi types view "Teammate's Type" --org
 npx -y calendly-axi types slots <uuid> --until 14d
+npx -y calendly-axi types slots <uuid> --window tomorrow
 npx -y calendly-axi types availability <uuid>
 npx -y calendly-axi types create --name "Intro Call" --duration 30
 npx -y calendly-axi types create --name "Intro Call" --duration 30 --locations '[{"kind":"physical","location":"123 Main St"}]'
