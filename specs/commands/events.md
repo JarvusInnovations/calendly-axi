@@ -29,7 +29,7 @@ Scheduled-event reads and fallout management. API contract: [api/scheduled-event
 
 - The attribution/aggregation view: what did everyone who booked `<type>` answer, over a window — without walking events one by one.
 - `--type` accepts UUID / URI / name per [identifier resolution](../behaviors/identifier-resolution.md); `--org` widens both name resolution and the event sweep.
-- The events API has **no event-type filter** (see [api/scheduled-events](../api/scheduled-events.md)) — the command drains `scheduled_events` for the resolved scope + window and filters client-side on `event_type`, then drains each matching event's invitees. Default window: `--since 30d`.
+- The events API has **no event-type filter** (see [api/scheduled-events](../api/scheduled-events.md)) — the command drains `scheduled_events` for the resolved scope + window and filters client-side on `event_type`, then drains each matching event's invitees. **Default window: from 30 days back with an open-ended future bound** — the API only filters on event *start* time, and attribution mostly concerns bookings that haven't happened yet (discovered live: a lookback-only default silently missed a future-starting booking). Explicit window flags behave exactly as given.
 - Output: header (resolved type, window, `events: N, invitees: M`), then one row per question answer — `answers[K]{start,email,question,answer}` sorted by start descending. `--utm` swaps the schema to `{start,email,utm_source,utm_medium,utm_campaign}` (one row per invitee). Empty: definitive.
 - Includes only `active` invitees by default; `--status canceled|all` widens.
 

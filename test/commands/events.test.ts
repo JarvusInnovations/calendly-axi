@@ -800,7 +800,11 @@ describe("events answers", () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it("defaults the window to --since 30d", async () => {
+  it("defaults the window to a 30d lookback with an open future bound", async () => {
+    // The API filters on event START time and attribution mostly concerns
+    // future bookings, so the default must not cap at "now" — see
+    // specs/commands/events.md (discovered live: a lookback-only default
+    // silently missed a future-starting booking).
     seedCache();
     const spy = vi
       .spyOn(globalThis, "fetch")
@@ -811,8 +815,8 @@ describe("events answers", () => {
 
     const eventsUrl = queryOf(spy.mock.calls[1]![0]);
     expect(eventsUrl.get("min_start_time")).toBeTruthy();
-    expect(eventsUrl.get("max_start_time")).toBeTruthy();
-    expect(out).toContain("last 30d");
+    expect(eventsUrl.get("max_start_time")).toBeNull();
+    expect(out).toContain("last 30d + upcoming");
   });
 
   it("a definitive empty state names the type, window, and zero counts when no events match", async () => {

@@ -354,16 +354,22 @@ async function eventsAnswers(parsed: Parsed): Promise<string> {
   });
   const typeName = typeRes.resource?.name ?? typeUuid;
 
-  const window = resolveWindow(
-    {
-      from: str(parsed, "--from"),
-      to: str(parsed, "--to"),
-      since: str(parsed, "--since"),
-      until: str(parsed, "--until"),
-      named: str(parsed, "--window"),
-    },
-    { timeZone: self.timezone, default: { since: "30d" } },
-  );
+  const windowFlags = {
+    from: str(parsed, "--from"),
+    to: str(parsed, "--to"),
+    since: str(parsed, "--since"),
+    until: str(parsed, "--until"),
+    named: str(parsed, "--window"),
+  };
+  const defaulted = Object.values(windowFlags).every((v) => v === undefined);
+  let window = resolveWindow(windowFlags, { timeZone: self.timezone, default: { since: "30d" } });
+  if (defaulted) {
+    // The API filters on event *start* time only, and attribution mostly
+    // concerns bookings that haven't happened yet — so the default window
+    // keeps the 30-day lookback but leaves the future open instead of
+    // capping at "now" (specs/commands/events.md, discovered live).
+    window = { from: window.from, label: `${window.label.replace(/\(last 30d/, "(last 30d + upcoming")}` };
+  }
 
   const eventsQuery: Record<string, QueryValue> = {
     ...scope,
