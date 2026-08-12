@@ -7,11 +7,14 @@ import { installHooks } from "./hook.js";
 
 /** `auth setup|whoami|logout` — see `specs/commands/auth.md`. */
 
-const TOKEN_CREATION_URL = "https://calendly.com/integrations/api_webhooks";
+// Exported so the docs generator (`scripts/generate-skill.ts`) can render
+// the same setup guidance into `skills/calendly-axi/SKILL.md` and the README
+// without duplicating the URL/scope strings a third time.
+export const TOKEN_CREATION_URL = "https://calendly.com/integrations/api_webhooks";
 
 // The scopes `auth setup`'s guidance lists — kept in lockstep with the list
 // in `specs/api/conventions.md`.
-const REQUIRED_SCOPES = [
+export const REQUIRED_SCOPES = [
   "users:read",
   "organizations:read",
   "event_types:read/write",

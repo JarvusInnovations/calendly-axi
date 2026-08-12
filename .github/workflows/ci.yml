@@ -36,6 +36,9 @@ jobs:
     - name: Test
       run: bun run test
 
+    - name: Check generated skill is up to date
+      run: bun run docs:check
+
     - name: Smoke test the built bundle
       # `--version` alone is not enough — it never reaches command dispatch,
       # so it stays green through failures in exactly the code that matters.
