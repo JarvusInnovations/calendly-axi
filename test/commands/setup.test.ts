@@ -2,7 +2,8 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeF
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { hookCommand } from "../../src/commands/hook.js";
+import { main } from "../../src/cli.js";
+import { setupCommand } from "../../src/commands/setup.js";
 
 let home: string;
 const claudePath = () => join(home, ".claude", "settings.json");
@@ -30,21 +31,21 @@ afterEach(() => {
   delete process.env.CALENDLY_AXI_DISABLE_HOOKS;
 });
 
-describe("hook status", () => {
+describe("setup hooks status", () => {
   it("reports installed + command when our hook is present (others ignored)", async () => {
     writeClaude(["gh-axi", "calendly-axi"]);
-    const out = await hookCommand(["status"]);
+    const out = await setupCommand(["hooks", "status"]);
     expect(out).toContain("hooks[3]{agent,installed,command,current}:");
     expect(out).toMatch(/Claude Code,true,calendly-axi/);
     expect(out).toMatch(/Codex,false,/); // no codex file
     expect(out).toMatch(/OpenCode,false,/); // no plugin file
   });
 
-  it("reports not-installed when absent, and defaults bare args to status", async () => {
+  it("reports not-installed when absent", async () => {
     writeClaude(["gh-axi"]);
-    const out = await hookCommand([]); // bare → status
+    const out = await setupCommand(["hooks", "status"]);
     expect(out).toMatch(/Claude Code,false,/);
-    expect(out).toContain("hook install");
+    expect(out).toContain("setup hooks");
   });
 
   it("reports current:false for a stale command", async () => {
@@ -63,7 +64,7 @@ describe("hook status", () => {
         2,
       ),
     );
-    const out = await hookCommand(["status"]);
+    const out = await setupCommand(["hooks", "status"]);
     expect(out).toMatch(/Claude Code,true,\/nonexistent\/calendly-axi,false/);
   });
 
@@ -87,13 +88,13 @@ describe("hook status", () => {
         2,
       ),
     );
-    const out = await hookCommand(["status"]);
+    const out = await setupCommand(["hooks", "status"]);
     expect(out).toMatch(/Claude Code,true,.*,true/);
   });
 
   it("notes CALENDLY_AXI_DISABLE_HOOKS=1 when set", async () => {
     process.env.CALENDLY_AXI_DISABLE_HOOKS = "1";
-    const out = await hookCommand(["status"]);
+    const out = await setupCommand(["hooks", "status"]);
     expect(out).toContain("CALENDLY_AXI_DISABLE_HOOKS=1");
   });
 });
@@ -116,10 +117,10 @@ function withSimulatedDistEntrypoint<T>(fn: () => T): T {
   }
 }
 
-describe("hook install", () => {
+describe("setup hooks (bare = install/repair)", () => {
   it("is a no-op that says so when disabled via env", async () => {
     process.env.CALENDLY_AXI_DISABLE_HOOKS = "1";
-    const out = await hookCommand(["install"]);
+    const out = await setupCommand(["hooks"]);
     expect(out).toContain("CALENDLY_AXI_DISABLE_HOOKS=1");
   });
 
@@ -127,7 +128,7 @@ describe("hook install", () => {
     const original = process.argv[1];
     process.argv[1] = join(home, "bin", "calendly-axi.ts");
     try {
-      const out = await hookCommand(["install"]);
+      const out = await setupCommand(["hooks"]);
       expect(out).toContain(".ts dev entrypoint");
     } finally {
       process.argv[1] = original;
@@ -135,7 +136,7 @@ describe("hook install", () => {
   });
 
   it("installs the Claude Code + Codex hooks and the OpenCode plugin under the stubbed home", async () => {
-    const out = await withSimulatedDistEntrypoint(() => hookCommand(["install"]));
+    const out = await withSimulatedDistEntrypoint(() => setupCommand(["hooks"]));
     expect(out).toContain("installed/repaired");
 
     const claude = JSON.parse(readFileSync(claudePath(), "utf-8"));
@@ -150,18 +151,27 @@ describe("hook install", () => {
   });
 
   it("is idempotent: a second install makes no further changes", async () => {
-    await withSimulatedDistEntrypoint(() => hookCommand(["install"]));
+    await withSimulatedDistEntrypoint(() => setupCommand(["hooks"]));
     const first = readFileSync(claudePath(), "utf-8");
-    await withSimulatedDistEntrypoint(() => hookCommand(["install"]));
+    await withSimulatedDistEntrypoint(() => setupCommand(["hooks"]));
     const second = readFileSync(claudePath(), "utf-8");
     expect(second).toBe(first);
   });
+
+  it("bare `setup hooks` behaves identically to explicit `setup hooks install`", async () => {
+    const bare = await withSimulatedDistEntrypoint(() => setupCommand(["hooks"]));
+    const claudeAfterBare = readFileSync(claudePath(), "utf-8");
+    const explicit = await withSimulatedDistEntrypoint(() => setupCommand(["hooks", "install"]));
+    const claudeAfterExplicit = readFileSync(claudePath(), "utf-8");
+    expect(explicit).toBe(bare);
+    expect(claudeAfterExplicit).toBe(claudeAfterBare);
+  });
 });
 
-describe("hook uninstall", () => {
+describe("setup hooks uninstall", () => {
   it("removes only our entry, leaving others; second run is a no-op", async () => {
     writeClaude(["gh-axi", "calendly-axi", "gws-axi"]);
-    const out = await hookCommand(["uninstall"]);
+    const out = await setupCommand(["hooks", "uninstall"]);
     expect(out).toContain("removed from Claude Code");
 
     const settings = JSON.parse(readFileSync(claudePath(), "utf-8"));
@@ -170,24 +180,47 @@ describe("hook uninstall", () => {
     );
     expect(cmds).toEqual(["gh-axi", "gws-axi"]); // calendly-axi gone, others kept
 
-    const again = await hookCommand(["uninstall"]);
+    const again = await setupCommand(["hooks", "uninstall"]);
     expect(again).toContain("no-op");
   });
 
   it("round-trip with install: uninstall clears everything install wrote", async () => {
-    await withSimulatedDistEntrypoint(() => hookCommand(["install"]));
-    const out = await hookCommand(["uninstall"]);
+    await withSimulatedDistEntrypoint(() => setupCommand(["hooks"]));
+    const out = await setupCommand(["hooks", "uninstall"]);
     expect(out).toContain("removed from");
     expect(out).toContain("OpenCode");
 
-    const status = await hookCommand(["status"]);
+    const status = await setupCommand(["hooks", "status"]);
     expect(status).toMatch(/Claude Code,false,/);
     expect(status).toMatch(/OpenCode,false,/);
   });
 });
 
-describe("hook: unknown subcommand", () => {
-  it("rejects with VALIDATION_ERROR", async () => {
-    await expect(hookCommand(["frobnicate"])).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+describe("setup: unknown subcommand", () => {
+  it("rejects a first positional other than `hooks`", async () => {
+    await expect(setupCommand(["frobnicate"])).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+  });
+
+  it("requires a subcommand when called bare", async () => {
+    await expect(setupCommand([])).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+  });
+
+  it("rejects an unknown `setup hooks` action", async () => {
+    await expect(setupCommand(["hooks", "frobnicate"])).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+  });
+});
+
+describe("top-level `hook` command removed (v1.1.0, no alias)", () => {
+  it("the former `hook status` invocation now fails as an unknown command", async () => {
+    const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      await main(["hook", "status"]);
+      expect(process.exitCode).toBe(2);
+      const output = writeSpy.mock.calls.map((call) => String(call[0])).join("");
+      expect(output).toContain("Unknown command: hook");
+    } finally {
+      writeSpy.mockRestore();
+      process.exitCode = 0;
+    }
   });
 });

@@ -53,14 +53,14 @@ Five ordered health checks — credentials, token, organization, rate-limit head
 npx -y calendly-axi doctor
 ```
 
-### `calendly-axi hook [install|status|uninstall]`
+### `calendly-axi setup hooks [status|uninstall]`
 
-Manage the SessionStart hook (Claude Code, Codex, OpenCode) that injects the home view at session start
+Manage the SessionStart hook (Claude Code, Codex, OpenCode) that injects the home view at session start — bare `setup hooks` installs/repairs
 
 ```sh
-npx -y calendly-axi hook status
-npx -y calendly-axi hook install
-npx -y calendly-axi hook uninstall
+npx -y calendly-axi setup hooks
+npx -y calendly-axi setup hooks status
+npx -y calendly-axi setup hooks uninstall
 ```
 
 ## Booking loop
@@ -205,4 +205,4 @@ npx -y calendly-axi webhooks sample --event invitee.created
 
 ## Getting help
 
-Run `npx -y calendly-axi <command> --help` for any command's full flag reference. Run `npx -y calendly-axi` (no args, needs credentials) for the live home view — or skip the invocation entirely by installing the SessionStart hook (`npx -y calendly-axi hook install`).
+Run `npx -y calendly-axi <command> --help` for any command's full flag reference. Run `npx -y calendly-axi` (no args, needs credentials) for the live home view — or skip the invocation entirely by installing the SessionStart hook (`npx -y calendly-axi setup hooks`).

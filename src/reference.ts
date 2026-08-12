@@ -176,13 +176,13 @@ export const COMMAND_GROUPS: CommandGroup[] = [
         examples: ["calendly-axi doctor"],
       },
       {
-        usage: "hook [install|status|uninstall]",
+        usage: "setup hooks [status|uninstall]",
         summary:
-          "Manage the SessionStart hook (Claude Code, Codex, OpenCode) that injects the home view at session start",
+          "Manage the SessionStart hook (Claude Code, Codex, OpenCode) that injects the home view at session start — bare `setup hooks` installs/repairs",
         examples: [
-          "calendly-axi hook status",
-          "calendly-axi hook install",
-          "calendly-axi hook uninstall",
+          "calendly-axi setup hooks",
+          "calendly-axi setup hooks status",
+          "calendly-axi setup hooks uninstall",
         ],
       },
     ],

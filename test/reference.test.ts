@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { COMMAND_GROUPS, renderCommandHelp, renderTopLevelHelp } from "../src/reference.js";
 
-const V1_COMMANDS = ["events", "link", "book", "busy", "types", "webhooks", "auth", "doctor", "hook"];
+const V1_COMMANDS = ["events", "link", "book", "busy", "types", "webhooks", "auth", "doctor", "setup"];
 
 describe("COMMAND_GROUPS", () => {
   it("covers every v1 command surface named in specs/commands/", () => {
