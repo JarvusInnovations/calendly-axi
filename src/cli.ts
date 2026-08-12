@@ -5,7 +5,7 @@ import { version } from "./version.js";
 import { homeCommand } from "./commands/home.js";
 import { authCommand } from "./commands/auth.js";
 import { doctorCommand } from "./commands/doctor.js";
-import { hookCommand } from "./commands/hook.js";
+import { setupCommand } from "./commands/setup.js";
 import { typesCommand } from "./commands/types.js";
 import { eventsCommand } from "./commands/events.js";
 import { busyCommand } from "./commands/busy.js";
@@ -63,7 +63,7 @@ export async function main(argv: string[] = process.argv.slice(2)) {
     commands: {
       auth: async (args) => authCommand(args),
       doctor: async (args) => doctorCommand(args),
-      hook: async (args) => hookCommand(args),
+      setup: async (args) => setupCommand(args),
       types: async (args) => typesCommand(args),
       events: async (args) => eventsCommand(args),
       busy: async (args) => busyCommand(args),

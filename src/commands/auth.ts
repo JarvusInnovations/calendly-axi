@@ -3,7 +3,7 @@ import { fetchProfile } from "../calendly/scope.js";
 import { clearConfig, readConfig, resolveCredentials, writeConfig, type Credentials } from "../config.js";
 import { AUTH_FLAGS, bool, parseSubcommand, str, type Parsed } from "../flags.js";
 import { renderObject } from "../output/index.js";
-import { installHooks } from "./hook.js";
+import { installHooks } from "./setup.js";
 
 /** `auth setup|whoami|logout` — see `specs/commands/auth.md`. */
 
