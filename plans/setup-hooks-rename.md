@@ -25,7 +25,7 @@ Bring the hook-lifecycle surface in line with the released family convention dis
 - [x] `calendly-axi hook <anything>` → unknown-command error (no silent alias), exit per SDK convention.
 - [x] `doctor`'s failing hooks check names `setup hooks` as the remediation.
 - [x] `bun run docs:check` green — SKILL.md and reference regenerated; no `calendly-axi hook` string remains anywhere in help, SKILL.md, or README.
-- [ ] Live: `setup hooks status` against the real installed hook reports current.
+- [x] Live: `setup hooks status` against the real installed hook reports current. *(Verified 2026-08-12 post-merge — status renders per-agent rows against the real installed hooks; `current: false` shown correctly when inspecting from the repo build while the hooks point at the PATH-installed binary.)*
 
 ## Risks / unknowns
 
