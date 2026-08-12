@@ -65,19 +65,21 @@ npx -y calendly-axi setup hooks uninstall
 
 ## Booking loop
 
-### `calendly-axi events [list|view|invitees|cancel|no-show] [<args>] [flags]`
+### `calendly-axi events [list|view|invitees|answers|cancel|no-show] [<args>] [flags]`
 
-List upcoming events, inspect invitees, cancel, and mark no-shows
+List upcoming events, inspect invitees, aggregate booking answers, cancel, and mark no-shows
 
 Flags:
 
-- --status active|canceled     filter by event status (list/invitees)
-- --email <invitee-email>      filter/select by invitee email
-- --from/--to/--since/--until  time window (list; default: upcoming)
-- --window today|tomorrow|week calendar-aligned window (list; mutually exclusive with --from/--to/--since/--until)
-- --org                        organization-wide instead of self-scoped
-- --user <who>                 scope to another user
+- --status active|canceled|all filter by event/invitee status (list/invitees: active|canceled; answers: also all)
+- --email <invitee-email>      filter/select by invitee email (list/invitees)
+- --from/--to/--since/--until  time window (list default: upcoming; answers default: --since 30d)
+- --window today|tomorrow|week calendar-aligned window (list/answers; mutually exclusive with --from/--to/--since/--until)
+- --org                        organization-wide instead of self-scoped (list/answers)
+- --user <who>                 scope to another user (list)
 - --limit <n>                  cap the result count (list; default 100)
+- --type <event-type>          required — UUID, URI, or name, resolved against scope (answers)
+- --utm                        swap the answers schema to one row per invitee's UTM tracking fields (answers)
 - --reason <text>               cancellation reason (cancel)
 - no reschedule endpoint — cancel and rebook with `book` or `link`; invitees hold their own reschedule_url (cancel)
 - --undo                        clear a no-show mark (no-show)
@@ -90,6 +92,9 @@ npx -y calendly-axi events --window today
 npx -y calendly-axi events view <uuid>
 npx -y calendly-axi events invitees <uuid>
 npx -y calendly-axi events invitees <uuid> --email "ada@example.com"
+npx -y calendly-axi events answers --type "30 Minute Meeting"
+npx -y calendly-axi events answers --type <uuid> --since 90d --org
+npx -y calendly-axi events answers --type <uuid> --utm
 npx -y calendly-axi events cancel <uuid> --reason "scheduling conflict"
 npx -y calendly-axi events no-show <invitee-uuid> --event <event-uuid>
 npx -y calendly-axi events no-show <invitee-uuid> --event <event-uuid> --undo
