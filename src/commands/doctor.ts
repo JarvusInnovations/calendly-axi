@@ -4,7 +4,7 @@ import { fetchProfile } from "../calendly/scope.js";
 import { readConfig, resolveCredentials } from "../config.js";
 import { DOCTOR_FLAGS, parseFlags } from "../flags.js";
 import { joinBlocks, renderList, renderObject } from "../output/index.js";
-import { hookDoctorCheck } from "./hook.js";
+import { hookDoctorCheck } from "./setup.js";
 
 /** `doctor` — five ordered checks; see `specs/commands/auth.md#doctor`. */
 

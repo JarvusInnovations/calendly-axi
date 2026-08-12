@@ -25,7 +25,7 @@
 2. **token** — `users/me` succeeds? (latency reported)
 3. **organization** — org URI cached and fetchable?
 4. **rate-limit headroom** — `X-RateLimit-Remaining`/`Limit` from the check calls; flags the 50/min Free-tier ceiling when detected.
-5. **hooks** — SessionStart hook installed and pointing at the current executable?
+5. **hooks** — SessionStart hook installed and pointing at the current executable? (remediation: `setup hooks`)
 
 Exit 0 when all pass, 1 otherwise (`process.exitCode`, still structured stdout).
 

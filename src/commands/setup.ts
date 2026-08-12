@@ -2,13 +2,15 @@ import { delimiter, join, resolve } from "node:path";
 import { existsSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { AxiError, installSessionStartHooks } from "axi-sdk-js";
-import { HOOK_FLAGS, parseSubcommand } from "../flags.js";
+import { SETUP_FLAGS, parseSubcommand } from "../flags.js";
 import { joinBlocks, renderHelp, renderList, renderObject } from "../output/index.js";
 
 /**
- * `hook install|status|uninstall` — see `specs/commands/hook.md`. Manages
+ * `setup hooks [status|uninstall]` — see `specs/commands/setup.md`. Manages
  * the SessionStart hook that injects the home view for Claude Code, Codex,
- * and OpenCode via `axi-sdk-js`'s `installSessionStartHooks`.
+ * and OpenCode via `axi-sdk-js`'s `installSessionStartHooks`. There is no
+ * top-level `hook` command — v1.0.0 briefly shipped one; it was renamed in
+ * v1.1.0 with no alias kept, before any adoption existed.
  */
 
 const MARKER = "calendly-axi";
@@ -183,7 +185,7 @@ function renderStatus(suggestions: string[]): string {
 
 /**
  * Install/repair the SessionStart hook for all supported agents. Shared by
- * `hook install` and (as the convenience opt-in per AXI §7) `auth setup`.
+ * bare `setup hooks` and (as the convenience opt-in per AXI §7) `auth setup`.
  * Idempotent and self-repairing via the SDK; refuses `.ts` dev entrypoints
  * and honors `CALENDLY_AXI_DISABLE_HOOKS=1`. Returns a short human status.
  */
@@ -204,15 +206,18 @@ function hookStatus(): string {
   const anyInstalled = rows.some((r) => r.installed);
   return renderStatus([
     anyInstalled
-      ? "Run `calendly-axi hook uninstall` to remove the session hook"
-      : "Run `calendly-axi hook install` to load the home view at session start",
+      ? "Run `calendly-axi setup hooks uninstall` to remove the session hook"
+      : "Run `calendly-axi setup hooks` to load the home view at session start",
     "Run `calendly-axi --help` to see the full command list, or `<command> --help` for usage on any command",
   ]);
 }
 
 function hookInstall(): string {
   const status = installHooks();
-  return joinBlocks(renderObject({ status }), renderStatus(["Run `calendly-axi hook uninstall` to remove it"]));
+  return joinBlocks(
+    renderObject({ status }),
+    renderStatus(["Run `calendly-axi setup hooks uninstall` to remove it"]),
+  );
 }
 
 function hookUninstall(): string {
@@ -266,18 +271,34 @@ function hookUninstall(): string {
   return renderObject({ status: `removed from ${cleared.join(", ")}` });
 }
 
-export async function hookCommand(args: string[]) {
-  const { sub } = parseSubcommand("hook", args, HOOK_FLAGS, "status");
+/**
+ * `setup hooks [status|uninstall]` — the only `setup` group today. The first
+ * positional must be `hooks`; a second, optional positional picks the
+ * action, defaulting to `install` (bare `setup hooks` installs/repairs, per
+ * spec). Mirrors how every released sibling tool documents `setup hooks`
+ * while keeping calendly-axi's richer status/uninstall lifecycle.
+ */
+export async function setupCommand(args: string[]) {
+  const group = args[0];
+  if (group !== "hooks") {
+    throw new AxiError(
+      group === undefined ? "`setup` requires a subcommand" : `unknown setup subcommand "${group}"`,
+      "VALIDATION_ERROR",
+      ["valid subcommands: hooks"],
+    );
+  }
+
+  const { sub } = parseSubcommand("setup hooks", args.slice(1), SETUP_FLAGS, "install");
   switch (sub) {
-    case "status":
-      return hookStatus();
     case "install":
       return hookInstall();
+    case "status":
+      return hookStatus();
     case "uninstall":
       return hookUninstall();
     default:
-      // Unreachable — parseSubcommand already validated `sub` against HOOK_FLAGS.
-      throw new AxiError(`unknown hook subcommand "${sub}"`, "VALIDATION_ERROR", []);
+      // Unreachable — parseSubcommand already validated `sub` against SETUP_FLAGS.
+      throw new AxiError(`unknown setup hooks subcommand "${sub}"`, "VALIDATION_ERROR", []);
   }
 }
 
@@ -302,7 +323,7 @@ export function hookDoctorCheck(): Check {
     return {
       check: "hooks",
       status: "fail",
-      detail: "no SessionStart hook installed — run `calendly-axi hook install`",
+      detail: "no SessionStart hook installed — run `calendly-axi setup hooks`",
     };
   }
   const stale = installed.filter((r) => !r.current);
@@ -310,7 +331,7 @@ export function hookDoctorCheck(): Check {
     return {
       check: "hooks",
       status: "fail",
-      detail: `installed hook(s) for ${stale.map((r) => r.agent).join(", ")} point at a different executable — run \`calendly-axi hook install\` to repair`,
+      detail: `installed hook(s) for ${stale.map((r) => r.agent).join(", ")} point at a different executable — run \`calendly-axi setup hooks\` to repair`,
     };
   }
   return {

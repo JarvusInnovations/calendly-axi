@@ -105,7 +105,7 @@ function renderFooter(): string {
   return [
     "## Getting help",
     "",
-    `Run \`${npxify(`${BIN} <command> --help`)}\` for any command's full flag reference. Run \`${NPX_BIN}\` (no args, needs credentials) for the live home view — or skip the invocation entirely by installing the SessionStart hook (\`${npxify(`${BIN} hook install`)}\`).`,
+    `Run \`${npxify(`${BIN} <command> --help`)}\` for any command's full flag reference. Run \`${NPX_BIN}\` (no args, needs credentials) for the live home view — or skip the invocation entirely by installing the SessionStart hook (\`${npxify(`${BIN} setup hooks`)}\`).`,
   ].join("\n");
 }
 

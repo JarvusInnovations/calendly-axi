@@ -205,7 +205,7 @@ export const AUTH_FLAGS: Record<string, FlagSpec> = {
   logout: {},
 };
 
-export const HOOK_FLAGS: Record<string, FlagSpec> = {
+export const SETUP_FLAGS: Record<string, FlagSpec> = {
   install: {},
   status: {},
   uninstall: {},

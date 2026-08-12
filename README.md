@@ -56,7 +56,7 @@ Credentials and a bootstrap identity cache are stored in `~/.config/calendly-axi
 | `calendly-axi webhooks [list\|view\|create\|delete\|sample]` | Manage webhook subscriptions (reads work on Free; creation needs a paid plan) |
 | `calendly-axi auth [setup\|whoami\|logout]` | Connect, inspect, or remove the stored Personal Access Token |
 | `calendly-axi doctor` | Five ordered health checks — credentials, token, organization, rate-limit headroom, hooks |
-| `calendly-axi hook [install\|status\|uninstall]` | Manage the SessionStart hook that injects the home view at session start |
+| `calendly-axi setup hooks [status\|uninstall]` | Manage the SessionStart hook that injects the home view at session start |
 
 ```sh
 calendly-axi events invitees <uuid> --email "ada@example.com"
@@ -71,7 +71,7 @@ Run `calendly-axi <command> --help` for any command's full flag reference.
 
 `calendly-axi` integrates into your agent's session so state is visible before you act. You only need **one** of these:
 
-1. **SessionStart hook (recommended)** — run `calendly-axi hook install` (or just `calendly-axi auth setup`, which installs it too) to register a hook that injects the live home view (identity, upcoming events, booking-loop suggestions) at the start of every session, for Claude Code, Codex, and OpenCode. `calendly-axi hook status` shows it; `calendly-axi hook uninstall` removes it. Idempotent and self-repairing; disable everywhere with `CALENDLY_AXI_DISABLE_HOOKS=1`.
+1. **SessionStart hook (recommended)** — run `calendly-axi setup hooks` (or just `calendly-axi auth setup`, which installs it too) to register a hook that injects the live home view (identity, upcoming events, booking-loop suggestions) at the start of every session, for Claude Code, Codex, and OpenCode. `calendly-axi setup hooks status` shows it; `calendly-axi setup hooks uninstall` removes it. Idempotent and self-repairing; disable everywhere with `CALENDLY_AXI_DISABLE_HOOKS=1`.
 2. **Installable skill** — a static [`SKILL.md`](skills/calendly-axi/SKILL.md) the agent loads on demand (no per-session cost, broader agent support). It carries the same command guidance the hook's home view links out to, but not live state.
 
 The hook gives you live data on every session; the skill is lower overhead and works anywhere. They're complementary — install whichever fits, or both.
