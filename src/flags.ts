@@ -227,7 +227,8 @@ export function parseSubcommand(
 export const AUTH_FLAGS: Record<string, FlagSpec> = {
   setup: {
     value: ["--token"],
-    usage: "calendly-axi auth setup --token <pat>",
+    boolean: ["--token-stdin"],
+    usage: "calendly-axi auth setup (--token-stdin | --token <pat>)",
   },
   whoami: { boolean: ["--refresh"], usage: "calendly-axi auth whoami [--refresh]" },
   logout: { usage: "calendly-axi auth logout" },

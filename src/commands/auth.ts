@@ -1,6 +1,14 @@
+import { readFileSync } from "node:fs";
 import { AxiError } from "axi-sdk-js";
 import { fetchProfile } from "../calendly/scope.js";
-import { clearConfig, readConfig, resolveCredentials, writeConfig, type Credentials } from "../config.js";
+import {
+  TOKEN_STDIN_EXAMPLE,
+  clearConfig,
+  readConfig,
+  resolveCredentials,
+  writeConfig,
+  type Credentials,
+} from "../config.js";
 import { AUTH_FLAGS, bool, parseSubcommand, str, type Parsed } from "../flags.js";
 import { renderObject } from "../output/index.js";
 import { hookSummary } from "./setup.js";
@@ -39,8 +47,42 @@ export async function authCommand(args: string[]) {
   }
 }
 
+const SETUP_USAGE = "calendly-axi auth setup (--token-stdin | --token <pat>)";
+
+/**
+ * Resolve the token `auth setup` was handed, from exactly one channel
+ * (specs/commands/auth.md#auth-setup): `--token-stdin` (the documented
+ * default) or `--token <pat>`. Returns undefined when neither was given.
+ * Never a prompt — stdin is read only when the flag explicitly asked for it,
+ * so the command can't block on a TTY it wasn't told to read.
+ */
+function resolveSetupToken(parsed: Parsed): string | undefined {
+  const inline = str(parsed, "--token");
+  const fromStdin = bool(parsed, "--token-stdin");
+
+  if (inline !== undefined && fromStdin) {
+    throw new AxiError("--token and --token-stdin are mutually exclusive", "USAGE", [SETUP_USAGE]);
+  }
+  if (inline !== undefined) return inline;
+  if (!fromStdin) return undefined;
+
+  let raw = "";
+  try {
+    raw = readFileSync(0, "utf-8");
+  } catch {
+    raw = "";
+  }
+  const token = raw.replace(/\r?\n$/, "");
+  if (token.trim().length === 0) {
+    throw new AxiError("--token-stdin was set but stdin carried no token", "USAGE", [
+      `Pipe the token in without echo or history: \`${TOKEN_STDIN_EXAMPLE}\``,
+    ]);
+  }
+  return token;
+}
+
 async function authSetup(parsed: Parsed) {
-  const token = str(parsed, "--token");
+  const token = resolveSetupToken(parsed);
 
   if (!token) {
     const existing = resolveCredentials();
@@ -49,10 +91,11 @@ async function authSetup(parsed: Parsed) {
       throw new AxiError("No Calendly Personal Access Token configured", "VALIDATION_ERROR", [
         `Create a Personal Access Token at ${TOKEN_CREATION_URL} (Integrations → API & Webhooks → Generate new token)`,
         `Grant these scopes: ${REQUIRED_SCOPES.join(", ")}`,
-        "Then run `calendly-axi auth setup --token <pat>`",
+        `Then pipe it in without echo or history: \`${TOKEN_STDIN_EXAMPLE}\``,
+        "Or set CALENDLY_ACCESS_TOKEN in the environment (nothing is stored; it takes precedence over config)",
       ]);
     }
-    // Already configured, no --token given: the "repair my ambient setup"
+    // Already configured, no token given: the "repair my ambient setup"
     // path — revalidate and refresh the cache. The hook is only reported;
     // `setup hooks` is the one path that writes it.
     const profile = await fetchProfile(existing);
@@ -89,7 +132,7 @@ async function authWhoami(parsed: Parsed) {
   if (!creds) {
     return renderObject({
       status: "not configured",
-      help: "Run `calendly-axi auth setup --token <pat>` to connect your Calendly account",
+      help: `Run \`${TOKEN_STDIN_EXAMPLE}\` to connect your Calendly account`,
     });
   }
 

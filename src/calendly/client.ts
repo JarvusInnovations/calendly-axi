@@ -1,5 +1,5 @@
 import { AxiError } from "axi-sdk-js";
-import { resolveCredentials, type Credentials } from "../config.js";
+import { TOKEN_STDIN_EXAMPLE, resolveCredentials, type Credentials } from "../config.js";
 
 const BASE_URL = "https://api.calendly.com";
 const USER_AGENT = "calendly-axi (https://github.com/JarvusInnovations/calendly-axi)";
@@ -20,7 +20,7 @@ export function requireCredentials(): Credentials {
   const creds = resolveCredentials();
   if (!creds) {
     throw new AxiError("No Calendly credentials configured", "TOKEN_INVALID", [
-      "Run `calendly-axi auth setup --token <pat>` to connect your account",
+      `Run \`${TOKEN_STDIN_EXAMPLE}\` to connect your account (or set CALENDLY_ACCESS_TOKEN)`,
       `Create a Personal Access Token at ${TOKEN_CREATION_URL}`,
     ]);
   }
@@ -132,7 +132,7 @@ async function translateCalendlyError(res: Response, operation: string): Promise
       if (haystack.includes("insufficientscope") || haystack.includes("scope")) {
         return new AxiError(`Forbidden on ${operation} — the token is missing a required scope${suffix}`, "FORBIDDEN", [
           "Regenerate your Personal Access Token with the missing scope",
-          "Then re-run `calendly-axi auth setup --token <pat>`",
+          `Then store it again: \`${TOKEN_STDIN_EXAMPLE}\``,
         ]);
       }
       if (haystack.includes("plan") || haystack.includes("upgrade") || haystack.includes("subscription")) {

@@ -1,7 +1,7 @@
 import { calendlyRequest } from "../calendly/client.js";
 import { uuidFromUri } from "../calendly/ids.js";
 import { resolveSelf } from "../calendly/scope.js";
-import { resolveCredentials } from "../config.js";
+import { TOKEN_STDIN_EXAMPLE, resolveCredentials } from "../config.js";
 import { HOME_FLAGS, parseFlags } from "../flags.js";
 import { joinBlocks, renderHelp, renderList, renderObject } from "../output/index.js";
 
@@ -76,7 +76,7 @@ export async function homeCommand(args: string[]): Promise<string> {
     return joinBlocks(
       renderObject({ status: "not configured" }),
       renderHelp([
-        "Run `calendly-axi auth setup --token <pat>` to connect your Calendly account",
+        `Run \`${TOKEN_STDIN_EXAMPLE}\` to connect your Calendly account`,
         `Create a Personal Access Token at ${TOKEN_CREATION_URL}`,
       ]),
     );

@@ -171,11 +171,12 @@ export const COMMAND_GROUPS: CommandGroup[] = [
         usage: "auth [setup|whoami|logout] [flags]",
         summary: "Connect, inspect, or remove the stored Calendly Personal Access Token",
         flags: [
-          "--token <pat>   Personal Access Token (setup) — https://calendly.com/integrations/api_webhooks",
+          "--token-stdin   read the Personal Access Token from stdin (setup) — the recommended way; create one at https://calendly.com/integrations/api_webhooks",
+          "--token <pat>   pass the token as an argument (setup) — lands in shell history and the process list; prefer --token-stdin or CALENDLY_ACCESS_TOKEN",
           "--refresh       re-fetch identity instead of using the cache (whoami)",
         ],
         examples: [
-          "calendly-axi auth setup --token <pat>",
+          `read -rs T && printf %s "$T" | calendly-axi auth setup --token-stdin`,
           "calendly-axi auth setup   (no token, already configured: revalidate + refresh the identity cache)",
           "calendly-axi auth whoami",
           "calendly-axi auth whoami --refresh",

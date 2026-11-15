@@ -12,6 +12,14 @@ import { join } from "node:path";
 export const CONFIG_VERSION = 1;
 
 /**
+ * The portable, history-free way to hand `auth setup` a token — the one line
+ * every "not configured" hint prints (specs/commands/auth.md#auth-setup).
+ * Lives in this leaf module so the API client, home, doctor and the docs
+ * generator can share it without importing a command module.
+ */
+export const TOKEN_STDIN_EXAMPLE = `read -rs T && printf %s "$T" | calendly-axi auth setup --token-stdin`;
+
+/**
  * Bootstrap identity cached from `GET /users/me` at `auth setup` time. Every
  * command defaults its scoping to this cached self — see
  * `specs/behaviors/scoping.md`.

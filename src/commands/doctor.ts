@@ -1,7 +1,7 @@
 import { calendlyRequest, getRateLimitInfo } from "../calendly/client.js";
 import { uuidFromUri } from "../calendly/ids.js";
 import { fetchProfile } from "../calendly/scope.js";
-import { readConfig, resolveCredentials } from "../config.js";
+import { TOKEN_STDIN_EXAMPLE, readConfig, resolveCredentials } from "../config.js";
 import { DOCTOR_FLAGS, parseFlags } from "../flags.js";
 import { joinBlocks, renderList, renderObject } from "../output/index.js";
 import { hookDoctorCheck } from "./setup.js";
@@ -57,7 +57,7 @@ export async function doctorCommand(args: string[]): Promise<string> {
     checks.push({
       check: "credentials",
       status: "fail",
-      detail: "none found — run `calendly-axi auth setup --token <pat>`",
+      detail: `none found — run \`${TOKEN_STDIN_EXAMPLE}\``,
     });
     checks.push({ check: "token", status: "skipped", detail: "no credentials to validate" });
     checks.push({ check: "organization", status: "skipped", detail: "no credentials to validate" });
