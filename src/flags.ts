@@ -13,6 +13,15 @@ export interface FlagSpec {
   multi?: string[];
   /** Renamed or removed flags mapped to a targeted hint. */
   deprecated?: Record<string, string>;
+  /**
+   * How many positional arguments the command accepts: a count, or `"many"`
+   * for a variadic tail. Defaults to 0. Extras fail as USAGE rather than being
+   * dropped — a silently-ignored `events cancel <a> <b>` would cancel one
+   * event and report success for a call that named two.
+   */
+  positionals?: number | "many";
+  /** Usage line shown when extra positionals are rejected. */
+  usage?: string;
 }
 
 export interface Parsed {
@@ -129,6 +138,20 @@ export function parseFlags(command: string, argv: string[], spec: FlagSpec): Par
     unknown(name);
   }
 
+  const maxPositionals = spec.positionals ?? 0;
+  if (maxPositionals !== "many" && positional.length > maxPositionals && flags["--help"] === undefined) {
+    const extra = positional.slice(maxPositionals);
+    throw new AxiError(
+      `unexpected argument${extra.length > 1 ? "s" : ""} for \`${command}\`: ${extra.join(" ")}`,
+      "USAGE",
+      [
+        maxPositionals === 0
+          ? `\`${command}\` takes no positional arguments${spec.usage ? ` — usage: ${spec.usage}` : ""}`
+          : `\`${command}\` takes ${maxPositionals} positional argument${maxPositionals > 1 ? "s" : ""}${spec.usage ? ` — usage: ${spec.usage}` : ""}`,
+      ],
+    );
+  }
+
   return { positional, flags, multi };
 }
 
@@ -197,18 +220,25 @@ export function parseSubcommand(
 // One entry per command/subcommand pair, named FLAGS so every command
 // module imports its own slice. Keeping them all here (rather than scattered
 // across command files) is what makes "unknown flag" rejection consistent —
-// see `specs/commands/*.md` for the flags each surface declares.
+// see `specs/commands/*.md` for the flags each surface declares. An entry
+// with no `positionals` takes none; one that does carries the `usage` line
+// shown when an extra argument is rejected.
 
 export const AUTH_FLAGS: Record<string, FlagSpec> = {
-  setup: { value: ["--token"] },
-  whoami: { boolean: ["--refresh"] },
-  logout: {},
+  setup: {
+    value: ["--token"],
+    usage: "calendly-axi auth setup --token <pat>",
+  },
+  whoami: { boolean: ["--refresh"], usage: "calendly-axi auth whoami [--refresh]" },
+  logout: { usage: "calendly-axi auth logout" },
 };
 
+const SETUP_HOOKS_USAGE = "calendly-axi setup hooks [status|uninstall]";
+
 export const SETUP_FLAGS: Record<string, FlagSpec> = {
-  install: {},
-  status: {},
-  uninstall: {},
+  install: { usage: SETUP_HOOKS_USAGE },
+  status: { usage: SETUP_HOOKS_USAGE },
+  uninstall: { usage: SETUP_HOOKS_USAGE },
 };
 
 export const DOCTOR_FLAGS: FlagSpec = {};
@@ -217,8 +247,17 @@ export const HOME_FLAGS: FlagSpec = {};
 
 export const TYPES_FLAGS: Record<string, FlagSpec> = {
   list: { boolean: ["--org", "--all", "--inactive"] },
-  view: { boolean: ["--full", "--org"] },
-  slots: { value: ["--from", "--to", "--until", "--window"], boolean: ["--org"] },
+  view: {
+    boolean: ["--full", "--org"],
+    positionals: 1,
+    usage: "calendly-axi types view <type> [--org] [--full]",
+  },
+  slots: {
+    value: ["--from", "--to", "--until", "--window"],
+    boolean: ["--org"],
+    positionals: 1,
+    usage: "calendly-axi types slots <type> [--from --to | --until <dur> | --window <name>] [--org]",
+  },
   create: {
     value: [
       "--name",
@@ -238,8 +277,16 @@ export const TYPES_FLAGS: Record<string, FlagSpec> = {
   update: {
     value: ["--name", "--duration", "--description", "--color", "--locations"],
     boolean: ["--active", "--inactive", "--org"],
+    positionals: 1,
+    usage:
+      "calendly-axi types update <type> [--org] [--name --duration --description --color --locations --active|--inactive]",
   },
-  availability: { value: ["--rules"], boolean: ["--org"] },
+  availability: {
+    value: ["--rules"],
+    boolean: ["--org"],
+    positionals: 1,
+    usage: "calendly-axi types availability <type> [--org] [--rules <json|@file>]",
+  },
 };
 
 export const EVENTS_FLAGS: Record<string, FlagSpec> = {
@@ -247,21 +294,38 @@ export const EVENTS_FLAGS: Record<string, FlagSpec> = {
     value: ["--status", "--email", "--from", "--to", "--since", "--until", "--window", "--user", "--limit"],
     boolean: ["--org"],
   },
-  view: {},
-  invitees: { value: ["--status", "--email"] },
+  view: { positionals: 1, usage: "calendly-axi events view <event>" },
+  invitees: {
+    value: ["--status", "--email"],
+    positionals: 1,
+    usage: "calendly-axi events invitees <event>",
+  },
   answers: {
     value: ["--type", "--from", "--to", "--since", "--until", "--window", "--status"],
     boolean: ["--org", "--utm"],
   },
-  cancel: { value: ["--reason"] },
-  "no-show": { value: ["--event"], boolean: ["--undo"] },
+  cancel: {
+    value: ["--reason"],
+    positionals: 1,
+    usage: `calendly-axi events cancel <event> [--reason "..."]`,
+  },
+  "no-show": {
+    value: ["--event"],
+    boolean: ["--undo"],
+    positionals: 1,
+    usage: "calendly-axi events no-show <invitee-uri | invitee-uuid --event <event>> [--undo]",
+  },
 };
 
 export const BUSY_FLAGS: FlagSpec = {
   value: ["--from", "--to", "--until", "--window", "--user"],
 };
 
-export const LINK_FLAGS: FlagSpec = { boolean: ["--org"] };
+export const LINK_FLAGS: FlagSpec = {
+  boolean: ["--org"],
+  positionals: 1,
+  usage: "calendly-axi link <event-type> [--org]",
+};
 
 export const BOOK_FLAGS: FlagSpec = {
   value: ["--type", "--at", "--name", "--email", "--timezone", "--location", "--guests"],
@@ -274,8 +338,8 @@ export const BOOK_FLAGS: FlagSpec = {
 
 export const WEBHOOKS_FLAGS: Record<string, FlagSpec> = {
   list: { value: ["--scope", "--user", "--group"] },
-  view: {},
+  view: { positionals: 1, usage: "calendly-axi webhooks view <webhook>" },
   create: { value: ["--url", "--events", "--scope", "--user", "--group", "--signing-key"] },
-  delete: {},
+  delete: { positionals: 1, usage: "calendly-axi webhooks delete <webhook>" },
   sample: { value: ["--event", "--scope", "--user"] },
 };
