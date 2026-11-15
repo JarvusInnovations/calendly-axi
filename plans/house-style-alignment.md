@@ -1,5 +1,6 @@
 ---
 status: done
+pr: 24
 depends: []
 specs:
   - specs/commands/setup.md
