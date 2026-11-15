@@ -41,9 +41,14 @@ function formatInZone(iso: string, timeZone: string): string {
 }
 
 function inviteeSummary(event: Record<string, unknown>): string {
-  const counter = event.invitees_counter as { active?: number; limit?: number } | undefined;
-  if (!counter) return "?";
-  return `${counter.active ?? 0}/${counter.limit ?? "?"}`;
+  // Fail closed: a count the response didn't carry is `unknown`, never `0`
+  // ("nobody booked" is a claim) and never a bare `?`.
+  const counter = event.invitees_counter as { active?: unknown; limit?: unknown } | null | undefined;
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? String(v) : "unknown");
+  if (!counter || typeof counter !== "object") return "unknown";
+  const active = num(counter.active);
+  if (active === "unknown") return "unknown";
+  return `${active}/${num(counter.limit)}`;
 }
 
 function renderUpcoming(events: Array<Record<string, unknown>>, timeZone: string): string {
