@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 depends: []
 specs:
   - specs/commands/setup.md
@@ -56,20 +56,40 @@ Issue #23 lists where this tool predates the `jarvus-axi` house style. nexudus-a
 
 ## Validation
 
-- [ ] A read-only `.claude/` makes `setup hooks --scope project` throw `SETUP_FAILED` naming the file and Claude Code (fails against the old `setup.ts`, which returned `completed with a warning`).
-- [ ] Running `setup hooks` from an entrypoint the SDK declines throws `SETUP_FAILED` rather than reporting `installed/repaired`.
-- [ ] A repeat install reports `already installed and current at <scope> scope (no-op)` with unchanged file bytes.
-- [ ] An unparseable target is a `problems[]` row in `status` and `IO_ERROR` from `uninstall`.
-- [ ] `auth setup` with a good token and hooks enabled writes no file under a temp `HOME` and prints `session_hook: not installed`.
-- [ ] `--token-stdin` stores the piped token (spawned binary, temp `HOME`); empty stdin is `USAGE`; `--token` with `--token-stdin` is `USAGE`; without the flag stdin is never read.
-- [ ] An extra positional is `USAGE` (exit 2) on a zero-positional and on a one-positional command; `--help` is never blocked.
-- [ ] `doctor` reports a missing hook as `skipped` and stays healthy.
-- [ ] `CALENDLY_AXI_CONFIG_DIR` wins over `XDG_CONFIG_HOME`.
-- [ ] The built `dist/bin/calendly-axi.js --version` prints the package version.
-- [ ] Home renders a missing `invitees_counter` as `unknown`.
-- [ ] `bun run check && bun run build && bun run test && bun run docs:check` all pass.
+- [x] A read-only `.claude/` makes `setup hooks --scope project` throw `SETUP_FAILED` naming the file and Claude Code (fails against the old `setup.ts`, which returned `completed with a warning`).
+- [x] Running `setup hooks` from an entrypoint the SDK declines throws `SETUP_FAILED` rather than reporting `installed/repaired`.
+- [x] A repeat install reports `already installed and current at <scope> scope (no-op)` with unchanged file bytes.
+- [x] An unparseable target is a `problems[]` row in `status` and `IO_ERROR` from `uninstall`.
+- [x] `auth setup` with a good token and hooks enabled writes no file under a temp `HOME` and prints `session_hook: not installed`.
+- [x] `--token-stdin` stores the piped token (spawned binary, temp `HOME`); empty stdin is `USAGE`; `--token` with `--token-stdin` is `USAGE`; without the flag stdin is never read.
+- [x] An extra positional is `USAGE` (exit 2) on a zero-positional and on a one-positional command; `--help` is never blocked.
+- [x] `doctor` reports a missing hook as `skipped` and stays healthy.
+- [x] `CALENDLY_AXI_CONFIG_DIR` wins over `XDG_CONFIG_HOME`.
+- [x] The built `dist/bin/calendly-axi.js --version` prints the package version.
+- [x] Home renders a missing `invitees_counter` as `unknown`.
+- [x] `bun run check && bun run build && bun run test && bun run docs:check` all pass.
 
 ## Risks / unknowns
 
 - Positional counts are declared per subcommand by hand. A wrong count would reject a valid call, so each is taken from the command's own `requirePositional` usage and the existing suites must stay green.
 - The newer SDK writes Codex's `[features] hooks = true` into `~/.codex/config.toml` at any scope, so every test that can install must point `HOME` at a temp dir.
+
+## Notes
+
+Built as one branch (`fix/house-style-23`) rather than a plan per item: the hook items share one file and the flag table is touched by all of them. `pr:` is left for whoever opens the PR.
+
+- **`setup.ts` is nexudus-axi's file with the marker and env var renamed.** nexudus-axi's own header said it was "ported from calendly-axi's proven implementation", so this closes the loop. `installHooks` is no longer exported; `hookSummary()` is the only thing auth imports.
+- **`doctor` changed too.** With `auth setup` no longer installing the hook, a fresh `auth setup` followed by `doctor` would have exited 1 on a missing hook. The hook is opt-in now, so a missing one is `skipped` (the house rule); stale, unreadable and Codex-disabled hooks still fail.
+- **Two exit-0 paths remain in install, as in the canonical source:** `CALENDLY_AXI_DISABLE_HOOKS=1` and a `.ts` dev entrypoint both report that nothing was installed (`disabled (…)`, `skipped — …`) and exit 0. Neither claims success.
+- **Positional counts found no caller relying on the old leniency** — every command suite passed unchanged once the counts were declared; only three parser unit tests that passed a positional to a spec declaring none needed a count.
+- **`TOKEN_STDIN_EXAMPLE` lives in `src/config.ts`**, a leaf module, so the API client's "not configured" and "missing scope" errors can print it without importing a command module.
+- **The spawned-binary tests need `dist/`** and skip without it. CI builds before it tests. Run `bun run build` first locally, or a stale `dist/` will be what they exercise.
+- Verification: `bun run check && bun run build && bun run test && bun run docs:check` — 23 files, 447 tests (369 before). Exercised by hand against the built binary under a temp `HOME`: a read-only `.claude/` gives `SETUP_FAILED` exit 1; fixing it gives `installed/repaired`; a third run gives `(no-op)`.
+
+## Follow-ups
+
+- `--dir <path>` and git-root resolution for `--scope project`, once the canonical `setup.ts` has it.
+- `readConfig()` still treats an unparseable `config.json` as an empty default, and `calendlyRequest` still turns an empty `200` body into `{}`. Both are on the house style's fail-closed list and deserve their own plan.
+- `events list` renders a missing `invitees_counter.active` as an empty cell; give it the same `unknown` treatment as home.
+- Existing test fixtures use a real-looking name and email for the profile; swap them for placeholders.
+- Re-pin the AXI catalog entry after release (the issue asks for it once the first two items ship).
