@@ -233,12 +233,12 @@ export const AUTH_FLAGS: Record<string, FlagSpec> = {
   logout: { usage: "calendly-axi auth logout" },
 };
 
-const SETUP_HOOKS_USAGE = "calendly-axi setup hooks [status|uninstall]";
+const SETUP_HOOKS_USAGE = "calendly-axi setup hooks [status|uninstall] [--scope user|project]";
 
 export const SETUP_FLAGS: Record<string, FlagSpec> = {
-  install: { usage: SETUP_HOOKS_USAGE },
-  status: { usage: SETUP_HOOKS_USAGE },
-  uninstall: { usage: SETUP_HOOKS_USAGE },
+  install: { value: ["--scope"], usage: SETUP_HOOKS_USAGE },
+  status: { value: ["--scope"], usage: SETUP_HOOKS_USAGE },
+  uninstall: { value: ["--scope"], usage: SETUP_HOOKS_USAGE },
 };
 
 export const DOCTOR_FLAGS: FlagSpec = {};

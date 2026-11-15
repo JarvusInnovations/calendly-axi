@@ -3,7 +3,7 @@ import { fetchProfile } from "../calendly/scope.js";
 import { clearConfig, readConfig, resolveCredentials, writeConfig, type Credentials } from "../config.js";
 import { AUTH_FLAGS, bool, parseSubcommand, str, type Parsed } from "../flags.js";
 import { renderObject } from "../output/index.js";
-import { installHooks } from "./setup.js";
+import { hookSummary } from "./setup.js";
 
 /** `auth setup|whoami|logout` — see `specs/commands/auth.md`. */
 
@@ -53,7 +53,8 @@ async function authSetup(parsed: Parsed) {
       ]);
     }
     // Already configured, no --token given: the "repair my ambient setup"
-    // path — revalidate, refresh the cache, (re)install the hook.
+    // path — revalidate and refresh the cache. The hook is only reported;
+    // `setup hooks` is the one path that writes it.
     const profile = await fetchProfile(existing);
     if (existing.source === "config") {
       writeConfig({ ...readConfig(), profile_cache: profile });
@@ -64,7 +65,7 @@ async function authSetup(parsed: Parsed) {
       email: profile.email,
       scheduling_url: profile.scheduling_url,
       organization: profile.organization_uri,
-      session_hook: installHooks(),
+      session_hook: hookSummary(),
     });
   }
 
@@ -79,7 +80,7 @@ async function authSetup(parsed: Parsed) {
     email: profile.email,
     scheduling_url: profile.scheduling_url,
     organization: profile.organization_uri,
-    session_hook: installHooks(),
+    session_hook: hookSummary(),
   });
 }
 

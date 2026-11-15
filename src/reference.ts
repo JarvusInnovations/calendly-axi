@@ -176,7 +176,7 @@ export const COMMAND_GROUPS: CommandGroup[] = [
         ],
         examples: [
           "calendly-axi auth setup --token <pat>",
-          "calendly-axi auth setup   (no token, already configured: revalidate + repair the hook)",
+          "calendly-axi auth setup   (no token, already configured: revalidate + refresh the identity cache)",
           "calendly-axi auth whoami",
           "calendly-axi auth whoami --refresh",
           "calendly-axi auth logout",
@@ -189,13 +189,14 @@ export const COMMAND_GROUPS: CommandGroup[] = [
         examples: ["calendly-axi doctor"],
       },
       {
-        usage: "setup hooks [status|uninstall]",
+        usage: "setup hooks [status|uninstall] [--scope user|project]",
         summary:
           "Manage the SessionStart hook (Claude Code, Codex, OpenCode) that injects the home view at session start — bare `setup hooks` installs/repairs",
         examples: [
           "calendly-axi setup hooks",
           "calendly-axi setup hooks status",
           "calendly-axi setup hooks uninstall",
+          "calendly-axi setup hooks --scope project   (run from the repository root)",
         ],
       },
     ],
