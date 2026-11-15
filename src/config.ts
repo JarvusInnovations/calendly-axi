@@ -50,8 +50,16 @@ export interface Credentials {
 }
 
 // Paths ────────────────────────────────────────────────────────────
+/**
+ * `$CALENDLY_AXI_CONFIG_DIR` (used as given), then
+ * `$XDG_CONFIG_HOME/calendly-axi`, then `~/.config/calendly-axi`. The
+ * override exists mainly so tests and sandboxes can redirect config; an
+ * empty or whitespace-only value is unset.
+ */
 export function configDir(): string {
-  const xdg = process.env.XDG_CONFIG_HOME;
+  const override = process.env.CALENDLY_AXI_CONFIG_DIR?.trim();
+  if (override) return override;
+  const xdg = process.env.XDG_CONFIG_HOME?.trim();
   return xdg
     ? join(xdg, "calendly-axi")
     : join(homedir(), ".config", "calendly-axi");
