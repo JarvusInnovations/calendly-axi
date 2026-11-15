@@ -12,8 +12,8 @@ Profile cache (identity — zero API calls) + one live call: `GET /scheduled_eve
 
 The SDK prepends `bin:` + `description:`. Then:
 
-- **Configured:** `account:` line (name + email from cache), then `upcoming[N]{uuid,start,name,invitees}:` — up to 5 rows, start times rendered in the profile timezone. When zero upcoming: `upcoming: no active events scheduled` (definitive, not an error).
-- **Unconfigured:** no API call; a `status: not configured` line plus `help` pointing at `auth setup` and the PAT-creation URL.
+- **Configured:** `account:` line (name + email from cache), then `upcoming[N]{uuid,start,name,invitees}:` — up to 5 rows, start times rendered in the profile timezone. `invitees` is `<active>/<limit>` from `invitees_counter`; a counter (or either number) the response didn't carry renders as `unknown` — never `0` or `?`, since "no invitees" is a claim the tool has no basis for. When zero upcoming: `upcoming: no active events scheduled` (definitive, not an error).
+- **Unconfigured:** no API call; a `status: not configured` line plus `help` pointing at `auth setup --token-stdin` (the pipe form) and the PAT-creation URL.
 - **API unreachable / token invalid:** identity from cache, a one-line `status:` naming the problem, and a `doctor` hint — never a raw error, never nonzero exit; a broken home view must not break session start.
 
 ## Actions

@@ -1,7 +1,7 @@
 import { calendlyRequest } from "../calendly/client.js";
 import { uuidFromUri } from "../calendly/ids.js";
 import { resolveSelf } from "../calendly/scope.js";
-import { resolveCredentials } from "../config.js";
+import { TOKEN_STDIN_EXAMPLE, resolveCredentials } from "../config.js";
 import { HOME_FLAGS, parseFlags } from "../flags.js";
 import { joinBlocks, renderHelp, renderList, renderObject } from "../output/index.js";
 
@@ -41,9 +41,14 @@ function formatInZone(iso: string, timeZone: string): string {
 }
 
 function inviteeSummary(event: Record<string, unknown>): string {
-  const counter = event.invitees_counter as { active?: number; limit?: number } | undefined;
-  if (!counter) return "?";
-  return `${counter.active ?? 0}/${counter.limit ?? "?"}`;
+  // Fail closed: a count the response didn't carry is `unknown`, never `0`
+  // ("nobody booked" is a claim) and never a bare `?`.
+  const counter = event.invitees_counter as { active?: unknown; limit?: unknown } | null | undefined;
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? String(v) : "unknown");
+  if (!counter || typeof counter !== "object") return "unknown";
+  const active = num(counter.active);
+  if (active === "unknown") return "unknown";
+  return `${active}/${num(counter.limit)}`;
 }
 
 function renderUpcoming(events: Array<Record<string, unknown>>, timeZone: string): string {
@@ -76,7 +81,7 @@ export async function homeCommand(args: string[]): Promise<string> {
     return joinBlocks(
       renderObject({ status: "not configured" }),
       renderHelp([
-        "Run `calendly-axi auth setup --token <pat>` to connect your Calendly account",
+        `Run \`${TOKEN_STDIN_EXAMPLE}\` to connect your Calendly account`,
         `Create a Personal Access Token at ${TOKEN_CREATION_URL}`,
       ]),
     );

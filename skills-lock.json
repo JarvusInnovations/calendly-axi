@@ -1,11 +1,17 @@
 {
-  "version": 1,
+  "version": 2,
   "skills": {
+    "jarvus-axi": {
+      "source": "JarvusInnovations/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/jarvus-axi/SKILL.md",
+      "computedHash": "129c85079e810aae5b48db5da3fe6534f9d4570ef0ebe0dba3b870ae915d769c"
+    },
     "specops": {
       "source": "JarvusInnovations/specops",
       "sourceType": "github",
       "skillPath": "skills/specops/SKILL.md",
-      "computedHash": "e6442065c240ae62abfa266aa66094fb1dbe028aad96e4246f859bfa23d8a8df"
+      "computedHash": "a0f478223d6045743e86e10bec8f4d33e377e70d2ab0efba6203c97ccfb80f45"
     }
   }
 }

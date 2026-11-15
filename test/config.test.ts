@@ -30,6 +30,29 @@ describe("config paths", () => {
     expect(configDir()).toBe(join(process.env.XDG_CONFIG_HOME!, "calendly-axi"));
     expect(configPath()).toBe(join(process.env.XDG_CONFIG_HOME!, "calendly-axi", "config.json"));
   });
+
+  it("$CALENDLY_AXI_CONFIG_DIR wins over $XDG_CONFIG_HOME and is used as given", () => {
+    const override = mkdtempSync(join(tmpdir(), "calendly-axi-override-"));
+    process.env.CALENDLY_AXI_CONFIG_DIR = override;
+    try {
+      expect(configDir()).toBe(override);
+      expect(configPath()).toBe(join(override, "config.json"));
+      writeConfig({ version: 1, token: "tok" });
+      expect(existsSync(join(override, "config.json"))).toBe(true);
+      expect(existsSync(join(process.env.XDG_CONFIG_HOME!, "calendly-axi"))).toBe(false);
+    } finally {
+      delete process.env.CALENDLY_AXI_CONFIG_DIR;
+    }
+  });
+
+  it("treats an empty or whitespace-only $CALENDLY_AXI_CONFIG_DIR as unset", () => {
+    process.env.CALENDLY_AXI_CONFIG_DIR = "   ";
+    try {
+      expect(configDir()).toBe(join(process.env.XDG_CONFIG_HOME!, "calendly-axi"));
+    } finally {
+      delete process.env.CALENDLY_AXI_CONFIG_DIR;
+    }
+  });
 });
 
 describe("readConfig / writeConfig", () => {

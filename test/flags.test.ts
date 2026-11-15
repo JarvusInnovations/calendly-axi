@@ -1,11 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { bool, multiStr, parseFlags, parseSubcommand, requirePositional, str } from "../src/flags.js";
+import {
+  AUTH_FLAGS,
+  BOOK_FLAGS,
+  BUSY_FLAGS,
+  DOCTOR_FLAGS,
+  EVENTS_FLAGS,
+  HOME_FLAGS,
+  LINK_FLAGS,
+  SETUP_FLAGS,
+  TYPES_FLAGS,
+  WEBHOOKS_FLAGS,
+  bool,
+  multiStr,
+  parseFlags,
+  parseSubcommand,
+  requirePositional,
+  str,
+  type FlagSpec,
+} from "../src/flags.js";
 
 describe("parseFlags", () => {
   it("parses declared value and boolean flags", () => {
     const parsed = parseFlags("events list", ["--status", "active", "--org", "abc"], {
       value: ["--status"],
       boolean: ["--org"],
+      positionals: 1,
     });
     expect(parsed.flags["--status"]).toBe("active");
     expect(parsed.flags["--org"]).toBe(true);
@@ -47,8 +66,110 @@ describe("parseFlags", () => {
   });
 
   it("treats a lone -- as the positional separator", () => {
-    const parsed = parseFlags("link", ["--", "--not-a-flag"], {});
+    const parsed = parseFlags("link", ["--", "--not-a-flag"], { positionals: 1 });
     expect(parsed.positional).toEqual(["--not-a-flag"]);
+  });
+});
+
+describe("parseFlags: positional counts", () => {
+  it("rejects an extra on a command that takes none, as USAGE naming the argument", () => {
+    try {
+      parseFlags("doctor", ["stray"], {});
+      throw new Error("should have thrown");
+    } catch (err) {
+      expect((err as { code: string }).code).toBe("USAGE");
+      expect((err as Error).message).toContain("unexpected argument for `doctor`: stray");
+      expect((err as { suggestions: string[] }).suggestions.join(" ")).toContain("takes no positional arguments");
+    }
+  });
+
+  it("rejects a second positional where one is declared, with the usage line", () => {
+    try {
+      parseFlags("events cancel", ["AAA", "BBB", "CCC"], {
+        positionals: 1,
+        usage: "calendly-axi events cancel <event>",
+      });
+      throw new Error("should have thrown");
+    } catch (err) {
+      expect((err as { code: string }).code).toBe("USAGE");
+      expect((err as Error).message).toContain("unexpected arguments for `events cancel`: BBB CCC");
+      expect((err as { suggestions: string[] }).suggestions.join(" ")).toContain(
+        "takes 1 positional argument — usage: calendly-axi events cancel <event>",
+      );
+    }
+  });
+
+  it("accepts exactly the declared count, and any number for a variadic tail", () => {
+    expect(parseFlags("link", ["intro"], { positionals: 1 }).positional).toEqual(["intro"]);
+    expect(parseFlags("x", ["a", "b", "c"], { positionals: "many" }).positional).toEqual(["a", "b", "c"]);
+  });
+
+  it("never blocks --help", () => {
+    expect(parseFlags("doctor", ["stray", "--help"], {}).flags["--help"]).toBe(true);
+  });
+
+  it("counts arguments after -- too", () => {
+    expect(() => parseFlags("doctor", ["--", "stray"], {})).toThrowError(expect.objectContaining({ code: "USAGE" }));
+  });
+});
+
+describe("declared positional counts (the spec table)", () => {
+  const one: Array<[string, string, Record<string, FlagSpec>]> = [
+    ["types", "view", TYPES_FLAGS],
+    ["types", "slots", TYPES_FLAGS],
+    ["types", "update", TYPES_FLAGS],
+    ["types", "availability", TYPES_FLAGS],
+    ["events", "view", EVENTS_FLAGS],
+    ["events", "invitees", EVENTS_FLAGS],
+    ["events", "cancel", EVENTS_FLAGS],
+    ["events", "no-show", EVENTS_FLAGS],
+    ["webhooks", "view", WEBHOOKS_FLAGS],
+    ["webhooks", "delete", WEBHOOKS_FLAGS],
+  ];
+
+  it.each(one)("`%s %s` takes one identifier and rejects a second", (command, sub, specs) => {
+    expect(parseSubcommand(command, [sub, "AAA"], specs).parsed.positional).toEqual(["AAA"]);
+    expect(() => parseSubcommand(command, [sub, "AAA", "BBB"], specs)).toThrowError(
+      expect.objectContaining({ code: "USAGE" }),
+    );
+  });
+
+  it("`link` takes one event type and rejects a second", () => {
+    expect(parseFlags("link", ["intro"], LINK_FLAGS).positional).toEqual(["intro"]);
+    expect(() => parseFlags("link", ["intro", "call"], LINK_FLAGS)).toThrowError(
+      expect.objectContaining({ code: "USAGE" }),
+    );
+  });
+
+  const none: Array<[string, string, Record<string, FlagSpec>]> = [
+    ["auth", "setup", AUTH_FLAGS],
+    ["auth", "whoami", AUTH_FLAGS],
+    ["auth", "logout", AUTH_FLAGS],
+    ["setup hooks", "install", SETUP_FLAGS],
+    ["setup hooks", "status", SETUP_FLAGS],
+    ["setup hooks", "uninstall", SETUP_FLAGS],
+    ["types", "list", TYPES_FLAGS],
+    ["types", "create", TYPES_FLAGS],
+    ["events", "list", EVENTS_FLAGS],
+    ["events", "answers", EVENTS_FLAGS],
+    ["webhooks", "list", WEBHOOKS_FLAGS],
+    ["webhooks", "create", WEBHOOKS_FLAGS],
+    ["webhooks", "sample", WEBHOOKS_FLAGS],
+  ];
+
+  it.each(none)("`%s %s` takes no identifier and rejects a stray argument", (command, sub, specs) => {
+    expect(() => parseSubcommand(command, [sub, "stray"], specs)).toThrowError(
+      expect.objectContaining({ code: "USAGE" }),
+    );
+  });
+
+  it.each([
+    ["doctor", DOCTOR_FLAGS],
+    ["(home)", HOME_FLAGS],
+    ["busy", BUSY_FLAGS],
+    ["book", BOOK_FLAGS],
+  ] as Array<[string, FlagSpec]>)("`%s` rejects a stray argument", (command, spec) => {
+    expect(() => parseFlags(command, ["stray"], spec)).toThrowError(expect.objectContaining({ code: "USAGE" }));
   });
 });
 
@@ -120,7 +241,7 @@ describe("str / bool / requirePositional", () => {
 });
 
 describe("parseSubcommand", () => {
-  const specs = { list: { boolean: ["--org"] }, view: {} };
+  const specs = { list: { boolean: ["--org"] }, view: { positionals: 1 } };
 
   it("resolves an explicit subcommand", () => {
     const { sub, parsed } = parseSubcommand("types", ["view", "abc"], specs);
