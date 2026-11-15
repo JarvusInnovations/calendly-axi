@@ -6,19 +6,21 @@
 - **CLI runtime:** [`axi-sdk-js`](https://www.npmjs.com/package/axi-sdk-js) (`runAxiCli`) — command-first dispatch, bare `--help`/`--version`, home-header injection, TOON serialization, structured errors, session-hook installer.
 - **Output:** [TOON](https://toonformat.dev/) via `@toon-format/toon`, at the output boundary only. Internal logic works on plain objects.
 - **HTTP:** the platform `fetch`. No Calendly SDK — we wrap the REST API directly.
-- **Tests:** vitest, in `test/` mirroring `src/`, with `fetch` spies (no HTTP-mocking library) and `XDG_CONFIG_HOME` stubbed to a temp dir.
+- **Tests:** vitest, in `test/` mirroring `src/`, with `fetch` spies (no HTTP-mocking library), the config dir redirected to a temp dir (`CALENDLY_AXI_CONFIG_DIR` or `XDG_CONFIG_HOME`), and `HOME` pointed at a temp dir wherever a hook could be written.
 
 ## Project structure
 
 Follows harvest-axi's shape with remarkable-axi's newer conventions (declared flag sets, single-source reference, strict error mapping):
 
 ```
-bin/calendly-axi.ts        # shebang entry → src/cli.ts main()
+bin/calendly-axi.ts        # shebang entry: answers a bare --version via axi-sdk-js/fast-path,
+                           #   else dynamically imports src/cli.ts main()
 src/
 ├── cli.ts                 # runAxiCli wiring, custom formatError (USAGE/UNKNOWN_FLAG/VALIDATION_ERROR → exit 2;
 │                          #   unexpected throws wrapped as INTERNAL_ERROR — no stack trace ever reaches stdout)
 ├── flags.ts               # parseFlags(command, argv, spec): each command declares its flag set;
-│                          #   unknown flags rejected by name with the valid set inlined (AXI §6)
+│                          #   unknown flags rejected by name with the valid set inlined, and positionals
+│                          #   counted against the declared number — extras are USAGE, never dropped (AXI §6)
 ├── reference.ts           # COMMAND_GROUPS: the single source that renders top-level help,
 │                          #   per-command --help, and the generated SKILL.md
 ├── version.ts             # leaf module exporting the package version
@@ -36,7 +38,7 @@ src/
     ├── home.ts
     ├── auth.ts            # setup / whoami / logout
     ├── doctor.ts
-    ├── hook.ts            # install / status / uninstall
+    ├── setup.ts           # setup hooks: install / status / uninstall, --scope user|project
     ├── types.ts           # (+ types/ subcommand dir as needed)
     ├── events.ts          # (+ events/ subcommand dir as needed)
     ├── book.ts
@@ -49,10 +51,11 @@ src/
 
 ## Config & state
 
-- Config dir: `$XDG_CONFIG_HOME/calendly-axi` or `~/.config/calendly-axi`; dir mode `0700`, `config.json` mode `0600`.
+- Config dir, first match wins: `$CALENDLY_AXI_CONFIG_DIR` (used as given — the override exists mainly so tests and sandboxes can redirect it), then `$XDG_CONFIG_HOME/calendly-axi`, then `~/.config/calendly-axi`; dir mode `0700`, `config.json` mode `0600`. An empty or whitespace-only value is unset.
 - `config.json` — `{ version, token, profile_cache }` where `profile_cache` holds the bootstrap identity from `GET /users/me`: `{ user_uri, user_uuid, name, email, scheduling_url, timezone, organization_uri, organization_uuid, cached_at }`. Versioned (`CONFIG_VERSION = 1`); any unparseable config falls back to defaults, never throws.
 - Env override (takes precedence over config, for CI/cron): `CALENDLY_ACCESS_TOKEN`. Credential resolution reports its source (`env` | `config`) so `doctor`/`whoami` can surface it.
 - `CALENDLY_AXI_DISABLE_HOOKS=1` disables all session-hook writes (tests set this unconditionally).
+- **The environment set is closed:** `CALENDLY_ACCESS_TOKEN`, `CALENDLY_AXI_CONFIG_DIR`, `CALENDLY_AXI_DISABLE_HOOKS`, plus the platform's `XDG_CONFIG_HOME`, `HOME` and `PATH`. Adding one is a spec change.
 
 ## Docs & skill generation
 
@@ -65,7 +68,7 @@ src/
 
 - `bun run build` → `tsc` → `dist/`, then `chmod +x dist/bin/calendly-axi.js`. `bun run check` → `tsc --noEmit`.
 - Published `bin`: `calendly-axi → dist/bin/calendly-axi.js`; `files: ["dist", "skills/calendly-axi", "LICENSE", "README.md"]`; `publishConfig.access: public`.
-- `--version` prints exactly the `package.json` version (the publish workflow rewrites it from the release tag); no git-describe stamping.
+- `--version` prints exactly the `package.json` version (the publish workflow rewrites it from the release tag); no git-describe stamping. A bare `--version`/`-v`/`-V` is answered by the bin entry through `axi-sdk-js/fast-path` before the command graph is imported, with output identical to the SDK's own handling.
 - Releases: develop → main Release-PR flow (infra-components actions); npm publish on GitHub release via OIDC trusted publishing. First publish is manual (registry bootstrap).
 - CI (`ci.yml`): install → check → build → test, plus a **no-credentials smoke test** — run a built command with no config and assert a structured error on stdout, exit 1, and no stack trace.
 
