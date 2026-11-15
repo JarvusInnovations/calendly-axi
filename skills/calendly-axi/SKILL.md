@@ -23,10 +23,10 @@ Every example below runs via `npx -y calendly-axi` so it works whether or not th
 ## Setup
 
 ```sh
-npx -y calendly-axi auth setup --token <personal-access-token>
+read -rs T && printf %s "$T" | npx -y calendly-axi auth setup --token-stdin
 ```
 
-Create a Personal Access Token at <https://calendly.com/integrations/api_webhooks> (Integrations → API & Webhooks → Generate new token) with these scopes: `users:read`, `organizations:read`, `event_types:read/write`, `scheduled_events:read/write`, `availability:read/write`, `scheduling_links:write`, `webhooks:read/write`. Verify with `npx -y calendly-axi doctor`.
+Create a Personal Access Token at <https://calendly.com/integrations/api_webhooks> (Integrations → API & Webhooks → Generate new token) with these scopes: `users:read`, `organizations:read`, `event_types:read/write`, `scheduled_events:read/write`, `availability:read/write`, `scheduling_links:write`, `webhooks:read/write`. The line above reads it without echo and pipes it in on stdin, so it never lands in shell history or the process list. Or set `CALENDLY_ACCESS_TOKEN` in the environment and skip `auth setup` entirely. Verify with `npx -y calendly-axi doctor`.
 
 ### `calendly-axi auth [setup|whoami|logout] [flags]`
 
@@ -34,12 +34,13 @@ Connect, inspect, or remove the stored Calendly Personal Access Token
 
 Flags:
 
-- --token <pat>   Personal Access Token (setup) — https://calendly.com/integrations/api_webhooks
+- --token-stdin   read the Personal Access Token from stdin (setup) — the recommended way; create one at https://calendly.com/integrations/api_webhooks
+- --token <pat>   pass the token as an argument (setup) — lands in shell history and the process list; prefer --token-stdin or CALENDLY_ACCESS_TOKEN
 - --refresh       re-fetch identity instead of using the cache (whoami)
 
 ```sh
-npx -y calendly-axi auth setup --token <pat>
-npx -y calendly-axi auth setup   (no token, already configured: revalidate + repair the hook)
+read -rs T && printf %s "$T" | npx -y calendly-axi auth setup --token-stdin
+npx -y calendly-axi auth setup   (no token, already configured: revalidate + refresh the identity cache)
 npx -y calendly-axi auth whoami
 npx -y calendly-axi auth whoami --refresh
 npx -y calendly-axi auth logout
@@ -53,7 +54,7 @@ Five ordered health checks — credentials, token, organization, rate-limit head
 npx -y calendly-axi doctor
 ```
 
-### `calendly-axi setup hooks [status|uninstall]`
+### `calendly-axi setup hooks [status|uninstall] [--scope user|project]`
 
 Manage the SessionStart hook (Claude Code, Codex, OpenCode) that injects the home view at session start — bare `setup hooks` installs/repairs
 
@@ -61,6 +62,7 @@ Manage the SessionStart hook (Claude Code, Codex, OpenCode) that injects the hom
 npx -y calendly-axi setup hooks
 npx -y calendly-axi setup hooks status
 npx -y calendly-axi setup hooks uninstall
+npx -y calendly-axi setup hooks --scope project   (run from the repository root)
 ```
 
 ## Booking loop

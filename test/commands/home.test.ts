@@ -61,6 +61,46 @@ describe("home: unconfigured", () => {
     expect(spy).not.toHaveBeenCalled();
     expect(process.exitCode ?? 0).toBe(0);
   });
+
+  it("hints the stdin token form, never --token <pat>", async () => {
+    const out = await homeCommand([]);
+    expect(out).toContain(`read -rs T && printf %s "$T" | calendly-axi auth setup --token-stdin`);
+    expect(out).not.toContain("--token <pat>");
+  });
+});
+
+describe("home: invitee counts fail closed", () => {
+  function event(uuid: string, counter: unknown) {
+    return {
+      uri: `https://api.calendly.com/scheduled_events/${uuid}`,
+      name: `Call ${uuid}`,
+      start_time: "2030-01-02T15:00:00.000000Z",
+      ...(counter === undefined ? {} : { invitees_counter: counter }),
+    };
+  }
+
+  it("renders a counter the response did not carry as unknown, never 0 or ?", async () => {
+    seedCache();
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      jsonResponse({
+        collection: [
+          event("EV1", { active: 2, limit: 5 }),
+          event("EV2", undefined), // no counter at all
+          event("EV3", { limit: 4 }), // no active count: must not read as 0/4
+          event("EV4", { active: 1 }), // no limit
+          event("EV5", null),
+        ],
+      }),
+    );
+    const out = await homeCommand([]);
+    expect(out).toMatch(/EV1,.*,Call EV1,2\/5/);
+    expect(out).toMatch(/EV2,.*,Call EV2,unknown/);
+    expect(out).toMatch(/EV3,.*,Call EV3,unknown/);
+    expect(out).toMatch(/EV4,.*,Call EV4,1\/unknown/);
+    expect(out).toMatch(/EV5,.*,Call EV5,unknown/);
+    expect(out).not.toContain("0/4");
+    expect(out).not.toContain("?");
+  });
 });
 
 describe("home: configured", () => {

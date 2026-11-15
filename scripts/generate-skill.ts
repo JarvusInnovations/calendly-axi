@@ -17,6 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { COMMAND_GROUPS, DESCRIPTION, type CommandDoc, type CommandGroup } from "../src/reference.js";
 import { REQUIRED_SCOPES, TOKEN_CREATION_URL } from "../src/commands/auth.js";
+import { TOKEN_STDIN_EXAMPLE } from "../src/config.js";
 
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 export const SKILL_MD_PATH = join(REPO_ROOT, "skills", "calendly-axi", "SKILL.md");
@@ -26,9 +27,13 @@ export const SKILL_MD_PATH = join(REPO_ROOT, "skills", "calendly-axi", "SKILL.md
 const BIN = "calendly-axi";
 const NPX_BIN = `npx -y ${BIN}`;
 
-/** Rewrite a `calendly-axi ...` example from COMMAND_GROUPS to its npx form. */
+/**
+ * Rewrite a `calendly-axi ...` example from COMMAND_GROUPS to its npx form —
+ * at the start of the line, or after a pipe (`… | calendly-axi auth setup
+ * --token-stdin`).
+ */
 function npxify(example: string): string {
-  return example.startsWith(`${BIN} `) ? `${NPX_BIN}${example.slice(BIN.length)}` : example;
+  return example.replace(/(^|\| )calendly-axi(?= )/g, `$1${NPX_BIN}`);
 }
 
 // Trigger-shaped frontmatter (AXI §7): terse, outcome-focused, so an agent
@@ -71,10 +76,10 @@ function renderSetupIntro(): string {
   const scopes = REQUIRED_SCOPES.map((scope) => `\`${scope}\``).join(", ");
   return [
     "```sh",
-    npxify(`${BIN} auth setup --token <personal-access-token>`),
+    npxify(TOKEN_STDIN_EXAMPLE),
     "```",
     "",
-    `Create a Personal Access Token at <${TOKEN_CREATION_URL}> (Integrations → API & Webhooks → Generate new token) with these scopes: ${scopes}. Verify with \`${npxify(`${BIN} doctor`)}\`.`,
+    `Create a Personal Access Token at <${TOKEN_CREATION_URL}> (Integrations → API & Webhooks → Generate new token) with these scopes: ${scopes}. The line above reads it without echo and pipes it in on stdin, so it never lands in shell history or the process list. Or set \`CALENDLY_ACCESS_TOKEN\` in the environment and skip \`auth setup\` entirely. Verify with \`${npxify(`${BIN} doctor`)}\`.`,
   ].join("\n");
 }
 

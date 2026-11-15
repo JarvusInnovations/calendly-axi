@@ -44,11 +44,25 @@ describe("renderSkillMarkdown", () => {
     for (const block of codeBlocks) {
       for (const line of block.split("\n")) {
         if (line.trim().length === 0) continue;
-        if (line.includes("calendly-axi")) {
-          expect(line.trim().startsWith("npx -y calendly-axi")).toBe(true);
-        }
+        // Every invocation — at the start of the line or after a pipe — is
+        // the npx form.
+        const invocations = line.match(/(?:npx -y )?calendly-axi(?= )/g) ?? [];
+        for (const invocation of invocations) expect(invocation).toBe("npx -y calendly-axi");
+        if (line.includes("calendly-axi")) expect(invocations.length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it("leads setup with the token on stdin, and never shows it as an argument in a runnable example", () => {
+    expect(content).toContain(`read -rs T && printf %s "$T" | npx -y calendly-axi auth setup --token-stdin`);
+    expect(content).toContain("CALENDLY_ACCESS_TOKEN");
+    const codeBlocks = [...content.matchAll(/```sh\n([\s\S]*?)```/g)].map((m) => m[1]!).join("\n");
+    expect(codeBlocks).not.toMatch(/auth setup --token </);
+  });
+
+  it("documents setup hooks --scope and does not claim auth setup installs the hook", () => {
+    expect(content).toContain("setup hooks [status|uninstall] [--scope user|project]");
+    expect(content).not.toMatch(/repair the hook/);
   });
 
   it("carries no live state — no rendered home-view data, no unfilled placeholders", () => {

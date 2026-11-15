@@ -134,7 +134,7 @@ describe("doctor: hooks check", () => {
     expect(out).toMatch(/hooks,skipped/);
   });
 
-  it("fails the hooks check alone when hooks are enabled but nothing is installed", async () => {
+  it("skips the hooks check, staying healthy, when hooks are enabled but nothing is installed", async () => {
     delete process.env.CALENDLY_AXI_DISABLE_HOOKS;
     seedConfiguredCache();
     vi.spyOn(globalThis, "fetch")
@@ -144,9 +144,44 @@ describe("doctor: hooks check", () => {
     expect(out).toMatch(/credentials,ok/);
     expect(out).toMatch(/token,ok/);
     expect(out).toMatch(/organization,ok/);
+    // The hook is optional and only `setup hooks` installs it, so its
+    // absence is not a health failure.
+    expect(out).toMatch(/hooks,skipped,.*not installed \(optional\).*calendly-axi setup hooks/);
+    expect(out).toContain("healthy: true");
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("fails the hooks check when an installed hook points at a different executable", async () => {
+    delete process.env.CALENDLY_AXI_DISABLE_HOOKS;
+    seedConfiguredCache();
+    mkdirSync(join(home, ".claude"), { recursive: true });
+    writeFileSync(
+      join(home, ".claude", "settings.json"),
+      JSON.stringify({
+        hooks: {
+          SessionStart: [
+            { matcher: "", hooks: [{ type: "command", command: "/nonexistent/calendly-axi", timeout: 10 }] },
+          ],
+        },
+      }),
+    );
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse(ME))
+      .mockResolvedValueOnce(jsonResponse(ORG));
+    const out = await doctorCommand([]);
     expect(out).toMatch(/hooks,fail/);
     expect(out).toContain("healthy: false");
     expect(process.exitCode).toBe(1);
+  });
+
+  it("names the stdin setup form, not --token <pat>, when no credentials exist", async () => {
+    const out = await doctorCommand([]);
+    expect(out).toContain("auth setup --token-stdin");
+    expect(out).not.toContain("--token <pat>");
+  });
+
+  it("rejects a stray positional as USAGE", async () => {
+    await expect(doctorCommand(["extra"])).rejects.toMatchObject({ code: "USAGE" });
   });
 
   it("passes the hooks check when installed and pointing at the current executable", async () => {
